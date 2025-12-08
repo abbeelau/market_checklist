@@ -31,11 +31,23 @@ def fetch_data():
         end_date = datetime.now()
         start_date = end_date - timedelta(days=400)
         
-        # Fetch data
-        bnd = yf.download('BND', start=start_date, end=end_date, progress=False)['Close']
-        tip = yf.download('TIP', start=start_date, end=end_date, progress=False)['Close']
-        ibit = yf.download('IBIT', start=start_date, end=end_date, progress=False)['Close']
-        tbill = yf.download('^IRX', start=start_date, end=end_date, progress=False)['Close']  # 13-week T-bill
+        # Fetch data - ensure we get Series by using squeeze or direct extraction
+        bnd_df = yf.download('BND', start=start_date, end=end_date, progress=False)
+        tip_df = yf.download('TIP', start=start_date, end=end_date, progress=False)
+        ibit_df = yf.download('IBIT', start=start_date, end=end_date, progress=False)
+        tbill_df = yf.download('^IRX', start=start_date, end=end_date, progress=False)
+        
+        # Extract Close prices and ensure they're Series with proper index
+        bnd = bnd_df['Close'].squeeze() if isinstance(bnd_df['Close'], pd.DataFrame) else bnd_df['Close']
+        tip = tip_df['Close'].squeeze() if isinstance(tip_df['Close'], pd.DataFrame) else tip_df['Close']
+        ibit = ibit_df['Close'].squeeze() if isinstance(ibit_df['Close'], pd.DataFrame) else ibit_df['Close']
+        tbill = tbill_df['Close'].squeeze() if isinstance(tbill_df['Close'], pd.DataFrame) else tbill_df['Close']
+        
+        # Drop any NaN values
+        bnd = bnd.dropna()
+        tip = tip.dropna()
+        ibit = ibit.dropna()
+        tbill = tbill.dropna()
         
         return bnd, tip, ibit, tbill
     except Exception as e:
@@ -62,8 +74,11 @@ if bnd_data is not None:
         bnd_5m = calc_return(bnd_data, 5)
         bnd_11m = calc_return(bnd_data, 11)
         
-        # Get latest T-bill rate (annualized)
-        tbill_rate = tbill_data.iloc[-1] if len(tbill_data) > 0 else 0
+        # Get latest T-bill rate (annualized) - handle both Series and scalar
+        if isinstance(tbill_data, pd.Series):
+            tbill_rate = float(tbill_data.iloc[-1])
+        else:
+            tbill_rate = float(tbill_data)
         
         # Calculate weighted BND score
         bnd_weighted = (bnd_3m * 0.33 + bnd_5m * 0.33 + bnd_11m * 0.34)
@@ -98,6 +113,10 @@ if bnd_data is not None:
         tip_5ma = calc_ma(tip_data, 5)
         tip_20ma = calc_ma(tip_data, 20)
         
+        # Ensure we have float values for comparison
+        tip_5ma = float(tip_5ma) if tip_5ma is not None else 0
+        tip_20ma = float(tip_20ma) if tip_20ma is not None else 0
+        
         indicator2_score = 1 if tip_5ma > tip_20ma else 0
         scores['indicator2'] = indicator2_score
         
@@ -121,6 +140,10 @@ if bnd_data is not None:
     try:
         ibit_3ma = calc_ma(ibit_data, 3)
         ibit_8ma = calc_ma(ibit_data, 8)
+        
+        # Ensure we have float values for comparison
+        ibit_3ma = float(ibit_3ma) if ibit_3ma is not None else 0
+        ibit_8ma = float(ibit_8ma) if ibit_8ma is not None else 0
         
         indicator3_score = 1 if ibit_3ma > ibit_8ma else 0
         scores['indicator3'] = indicator3_score
