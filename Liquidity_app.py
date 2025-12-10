@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import calendar
 
 # Set page configuration
-st.set_page_config(page_title="Market Checklist", layout="wide")
+st.set_page_config(page_title="Market Checklist", layout="centered")
 
 st.title("📊 Market Checklist")
 
@@ -158,10 +158,10 @@ def fetch_trend_data():
         start_date = end_date - timedelta(days=400)
         
         indices = {
-            'NDX': '^NDX',
-            'SPX': '^GSPC',
-            'HSI': '^HSI',
-            'HSTECH': '^HSTECH'
+            'NDX (Nasdaq 100)': '^NDX',
+            'SPX (S&P 500)': '^GSPC',
+            'HSI (Hang Seng)': '^HSI',
+            'HSTECH (Hang Seng TECH)': 'HSTECH.HK'
         }
         
         data = {}
@@ -569,64 +569,65 @@ with tab3:
     st.divider()
     
     # === INDICATOR 2: Stage 2 Multi-Index ===
-    st.subheader("2️⃣ Stage 2 Indicator (Multiple Indices)")
+    st.subheader("2️⃣ Stage 2 Indicator")
     
-    st.info("""
-    **Stage Definitions:**
-    - **S2** (Score 1.0): Price > 50MA, 50MA > 150MA, 150MA > 200MA
-    - **S1** (Score 0.5): Price > 50MA, 50MA > 150MA, 150MA < 200MA
-    - **S3 Strong** (Score 0.5): Price > 50MA, 50MA < 150MA, 150MA > 200MA
-    - **Other** (Score 0): All other scenarios
-    """)
+    # Index selector
+    selected_index = st.selectbox(
+        "Select Index to Analyze:",
+        ['NDX (Nasdaq 100)', 'SPX (S&P 500)', 'HSI (Hang Seng)', 'HSTECH (Hang Seng TECH)'],
+        help="Choose which index to use for Stage 2 calculation"
+    )
     
-    with st.spinner("Fetching index data..."):
+    with st.expander("ℹ️ Stage Definitions", expanded=False):
+        st.markdown("""
+        - **S2** (Score 1.0): Price > 50MA, 50MA > 150MA, 150MA > 200MA
+        - **S1** (Score 0.5): Price > 50MA, 50MA > 150MA, 150MA < 200MA
+        - **S3 Strong** (Score 0.5): Price > 50MA, 50MA < 150MA, 150MA > 200MA
+        - **Other** (Score 0): All other scenarios
+        """)
+    
+    with st.spinner(f"Fetching {selected_index} data..."):
         index_data = fetch_trend_data()
     
     if index_data:
-        stage_results = {}
+        # Get selected index data
+        data = index_data.get(selected_index)
         
-        for index_name, data in index_data.items():
-            if data is not None and len(data) >= 200:
-                try:
-                    current_price = data.iloc[-1]
-                    ma_50 = calc_ma(data, 50)
-                    ma_150 = calc_ma(data, 150)
-                    ma_200 = calc_ma(data, 200)
-                    
-                    stage, score = calculate_stage(current_price, ma_50, ma_150, ma_200)
-                    stage_results[index_name] = {
-                        'price': current_price,
-                        'ma50': ma_50,
-                        'ma150': ma_150,
-                        'ma200': ma_200,
-                        'stage': stage,
-                        'score': score
-                    }
-                except Exception as e:
-                    st.warning(f"Error calculating {index_name}: {str(e)}")
-        
-        # Display results
-        if stage_results:
-            cols = st.columns(len(stage_results))
-            for i, (idx_name, result) in enumerate(stage_results.items()):
-                with cols[i]:
-                    stage_emoji = "🟢" if result['score'] == 1.0 else ("🟡" if result['score'] == 0.5 else "🔴")
-                    st.metric(f"{idx_name} {stage_emoji}", result['stage'], f"Score: {result['score']}")
-                    with st.expander("Details"):
-                        st.write(f"Price: {result['price']:.2f}")
-                        st.write(f"50MA: {result['ma50']:.2f}")
-                        st.write(f"150MA: {result['ma150']:.2f}")
-                        st.write(f"200MA: {result['ma200']:.2f}")
-            
-            # Calculate average score
-            avg_stage_score = sum([r['score'] for r in stage_results.values()]) / len(stage_results)
-            indicator2_trend = avg_stage_score
-            scores_trend['indicator2'] = indicator2_trend
-            
-            st.metric("**Average Stage Score**", f"{indicator2_trend:.2f}/1",
-                     help=f"Average of {len(stage_results)} indices")
+        if data is not None and len(data) >= 200:
+            try:
+                current_price = data.iloc[-1]
+                ma_50 = calc_ma(data, 50)
+                ma_150 = calc_ma(data, 150)
+                ma_200 = calc_ma(data, 200)
+                
+                stage, score = calculate_stage(current_price, ma_50, ma_150, ma_200)
+                indicator2_trend = score
+                scores_trend['indicator2'] = indicator2_trend
+                
+                # Compact display
+                stage_emoji = "🟢" if score == 1.0 else ("🟡" if score == 0.5 else "🔴")
+                
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    st.metric(f"{selected_index} Stage", f"{stage} {stage_emoji}")
+                with col2:
+                    st.metric("Score", f"{score}/1")
+                
+                # Compact details
+                with st.expander("📊 Moving Average Details"):
+                    detail_col1, detail_col2 = st.columns(2)
+                    with detail_col1:
+                        st.write(f"**Price:** {current_price:.2f}")
+                        st.write(f"**50 MA:** {ma_50:.2f}")
+                    with detail_col2:
+                        st.write(f"**150 MA:** {ma_150:.2f}")
+                        st.write(f"**200 MA:** {ma_200:.2f}")
+                
+            except Exception as e:
+                st.error(f"Error calculating {selected_index}: {str(e)}")
+                scores_trend['indicator2'] = 0
         else:
-            st.warning("Unable to calculate stage indicators")
+            st.warning(f"Insufficient data for {selected_index}")
             scores_trend['indicator2'] = 0
     else:
         st.error("Unable to fetch index data")
