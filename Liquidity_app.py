@@ -4,6 +4,13 @@ import pandas as pd
 from datetime import datetime, timedelta
 import calendar
 
+# Try importing tvDatafeed (optional)
+try:
+    from tvDatafeed import TvDatafeed, Interval
+    TV_AVAILABLE = True
+except:
+    TV_AVAILABLE = False
+
 # Set page configuration
 st.set_page_config(page_title="Market Checklist", layout="centered")
 
@@ -155,29 +162,50 @@ def fetch_trend_data():
     """Fetch trend indicators data for multiple indices"""
     try:
         end_date = datetime.now()
-        # Fetch more data to ensure we have 200+ trading days (need ~300 calendar days minimum)
+        # Fetch more data to ensure we have 200+ trading days
         start_date = end_date - timedelta(days=500)
         
-        indices = {
-            'NDX (Nasdaq 100)': '^NDX',
-            'SPX (S&P 500)': '^GSPC',
-            'HSI (Hang Seng)': '^HSI',
-            'HSTECH (Hang Seng TECH)': 'HSTECH.HK'
+        indices_yf = {
+            'SPX (S&P 500)': ['^GSPC'],
+            'NDX (Nasdaq 100)': ['^NDX'],
+            'HSI (Hang Seng)': ['^HSI']
         }
         
         data = {}
-        for name, ticker in indices.items():
-            try:
-                df = yf.download(ticker, start=start_date, end=end_date, progress=False)
-                if not df.empty:
-                    close = df['Close'].squeeze() if isinstance(df['Close'], pd.DataFrame) else df['Close']
-                    clean_data = close.dropna()
-                    data[name] = clean_data
-                else:
-                    data[name] = None
-            except Exception as e:
-                st.warning(f"Error fetching {name}: {str(e)}")
+        
+        # Fetch from Yahoo Finance
+        for name, tickers in indices_yf.items():
+            success = False
+            for ticker in tickers:
+                try:
+                    df = yf.download(ticker, start=start_date, end=end_date, progress=False, timeout=10)
+                    if not df.empty and len(df) > 0:
+                        close = df['Close'].squeeze() if isinstance(df['Close'], pd.DataFrame) else df['Close']
+                        clean_data = close.dropna()
+                        if len(clean_data) > 0:
+                            data[name] = clean_data
+                            success = True
+                            break
+                except Exception as e:
+                    continue
+            
+            if not success:
                 data[name] = None
+        
+        # Try TradingView for HSTECH if available
+        if TV_AVAILABLE:
+            try:
+                tv = TvDatafeed()
+                # HSTECH symbol in TradingView format
+                hstech_df = tv.get_hist(symbol='HSTECH', exchange='HSI', interval=Interval.in_daily, n_bars=500)
+                if hstech_df is not None and not hstech_df.empty:
+                    data['HSTECH (Hang Seng TECH)'] = hstech_df['close'].dropna()
+                else:
+                    data['HSTECH (Hang Seng TECH)'] = None
+            except Exception as e:
+                data['HSTECH (Hang Seng TECH)'] = None
+        else:
+            data['HSTECH (Hang Seng TECH)'] = None
         
         return data
     except Exception as e:
@@ -584,7 +612,7 @@ with tab3:
     # Index selector
     selected_index = st.selectbox(
         "Select Index to Analyze:",
-        ['NDX (Nasdaq 100)', 'SPX (S&P 500)', 'HSI (Hang Seng)', 'HSTECH (Hang Seng TECH)'],
+        ['NDX (Nasdaq 100)', 'SPX (S&P 500)', 'HSI (Hang Seng)', 'HSTECH (Hang Seng TECH) - Manual'],
         help="Choose which index to use for Stage 2 calculation"
     )
     
@@ -596,56 +624,86 @@ with tab3:
         - **Other** (Score 0): All other scenarios
         """)
     
-    with st.spinner(f"Fetching {selected_index} data..."):
-        index_data = fetch_trend_data()
-    
-    if index_data and selected_index in index_data:
-        # Get selected index data
-        data = index_data[selected_index]
+    # Check if HSTECH manual mode
+    if "Manual" in selected_index:
+        st.info("⚠️ HSTECH data not available via API. Please enter stage manually.")
         
-        if data is not None and len(data) >= 200:
-            try:
-                current_price = float(data.iloc[-1])
-                ma_50 = calc_ma(data, 50)
-                ma_150 = calc_ma(data, 150)
-                ma_200 = calc_ma(data, 200)
-                
-                if ma_50 is None or ma_150 is None or ma_200 is None:
-                    st.warning(f"Unable to calculate moving averages for {selected_index}")
+        manual_stage = st.selectbox(
+            "Select HSTECH Stage:",
+            ["S2", "S1", "S3 Strong", "Other"],
+            help="Check TradingView or other sources for HSTECH stage"
+        )
+        
+        if manual_stage == "S2":
+            indicator2_trend = 1.0
+            stage_emoji = "🟢"
+        elif manual_stage in ["S1", "S3 Strong"]:
+            indicator2_trend = 0.5
+            stage_emoji = "🟡"
+        else:
+            indicator2_trend = 0.0
+            stage_emoji = "🔴"
+        
+        scores_trend['indicator2'] = indicator2_trend
+        
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.metric(f"HSTECH Stage", f"{manual_stage} {stage_emoji}")
+        with col2:
+            st.metric("Score", f"{indicator2_trend}/1")
+    
+    else:
+        # Automated calculation for other indices
+        with st.spinner(f"Fetching {selected_index} data..."):
+            index_data = fetch_trend_data()
+        
+        if index_data and selected_index in index_data:
+            # Get selected index data
+            data = index_data[selected_index]
+            
+            if data is not None and len(data) >= 200:
+                try:
+                    current_price = float(data.iloc[-1])
+                    ma_50 = calc_ma(data, 50)
+                    ma_150 = calc_ma(data, 150)
+                    ma_200 = calc_ma(data, 200)
+                    
+                    if ma_50 is None or ma_150 is None or ma_200 is None:
+                        st.warning(f"Unable to calculate moving averages for {selected_index}")
+                        scores_trend['indicator2'] = 0
+                    else:
+                        stage, score = calculate_stage(current_price, ma_50, ma_150, ma_200)
+                        indicator2_trend = score
+                        scores_trend['indicator2'] = indicator2_trend
+                        
+                        # Compact display
+                        stage_emoji = "🟢" if score == 1.0 else ("🟡" if score == 0.5 else "🔴")
+                        
+                        col1, col2 = st.columns([2, 1])
+                        with col1:
+                            st.metric(f"{selected_index} Stage", f"{stage} {stage_emoji}")
+                        with col2:
+                            st.metric("Score", f"{score}/1")
+                        
+                        # Compact details
+                        with st.expander("📊 Moving Average Details"):
+                            detail_col1, detail_col2 = st.columns(2)
+                            with detail_col1:
+                                st.write(f"**Price:** {current_price:.2f}")
+                                st.write(f"**50 MA:** {ma_50:.2f}")
+                            with detail_col2:
+                                st.write(f"**150 MA:** {ma_150:.2f}")
+                                st.write(f"**200 MA:** {ma_200:.2f}")
+                    
+                except Exception as e:
+                    st.error(f"Error calculating {selected_index}: {str(e)}")
                     scores_trend['indicator2'] = 0
-                else:
-                    stage, score = calculate_stage(current_price, ma_50, ma_150, ma_200)
-                    indicator2_trend = score
-                    scores_trend['indicator2'] = indicator2_trend
-                    
-                    # Compact display
-                    stage_emoji = "🟢" if score == 1.0 else ("🟡" if score == 0.5 else "🔴")
-                    
-                    col1, col2 = st.columns([2, 1])
-                    with col1:
-                        st.metric(f"{selected_index} Stage", f"{stage} {stage_emoji}")
-                    with col2:
-                        st.metric("Score", f"{score}/1")
-                    
-                    # Compact details
-                    with st.expander("📊 Moving Average Details"):
-                        detail_col1, detail_col2 = st.columns(2)
-                        with detail_col1:
-                            st.write(f"**Price:** {current_price:.2f}")
-                            st.write(f"**50 MA:** {ma_50:.2f}")
-                        with detail_col2:
-                            st.write(f"**150 MA:** {ma_150:.2f}")
-                            st.write(f"**200 MA:** {ma_200:.2f}")
-                
-            except Exception as e:
-                st.error(f"Error calculating {selected_index}: {str(e)}")
+            else:
+                st.warning(f"Insufficient data for {selected_index} (need 200+ days, got {len(data) if data is not None else 0})")
                 scores_trend['indicator2'] = 0
         else:
-            st.warning(f"Insufficient data for {selected_index} (need 200+ days, got {len(data) if data is not None else 0})")
+            st.error(f"Unable to fetch data for {selected_index}")
             scores_trend['indicator2'] = 0
-    else:
-        st.error(f"Unable to fetch data for {selected_index}")
-        scores_trend['indicator2'] = 0
     
     st.divider()
     
