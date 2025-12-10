@@ -157,12 +157,11 @@ def fetch_trend_data():
         end_date = datetime.now()
         start_date = end_date - timedelta(days=500)
         
-        # Map index names to possible ticker symbols
         indices = {
             'SPX (S&P 500)': ['^GSPC', 'SPY'],
             'NDX (Nasdaq 100)': ['^NDX', 'QQQ'],
             'HSI (Hang Seng)': ['^HSI', '0388.HK'],
-            'HSTECH (Hang Seng TECH)': ['3032.HK', 'HSTECH.HK', '^HSTECH']  # Try ETF and index
+            'HSTECH (Hang Seng TECH)': ['3032.HK', 'HSTECH.HK', '^HSTECH']
         }
         
         data = {}
@@ -173,7 +172,6 @@ def fetch_trend_data():
                 try:
                     df = yf.download(ticker, start=start_date, end=end_date, progress=False)
                     
-                    # Debug: show what we got
                     if name == 'HSTECH (Hang Seng TECH)':
                         st.write(f"DEBUG: Trying ticker {ticker}")
                         st.write(f"DEBUG: Got {len(df) if not df.empty else 0} rows")
@@ -185,7 +183,7 @@ def fetch_trend_data():
                             data[name] = clean_data
                             success = True
                             if name == 'HSTECH (Hang Seng TECH)':
-                                st.success(f"✅ Successfully fetched {ticker}: {len(clean_data)} days")
+                                st.success(f"Successfully fetched {ticker}: {len(clean_data)} days")
                             break
                 except Exception as e:
                     if name == 'HSTECH (Hang Seng TECH)':
