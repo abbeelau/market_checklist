@@ -158,39 +158,22 @@ def fetch_trend_data():
         start_date = end_date - timedelta(days=500)
         
         indices = {
-            'SPX (S&P 500)': ['^GSPC', 'SPY'],
-            'NDX (Nasdaq 100)': ['^NDX', 'QQQ'],
-            'HSI (Hang Seng)': ['^HSI', '0388.HK'],
-            'HSTECH (Hang Seng TECH)': ['3032.HK', 'HSTECH.HK', '^HSTECH']
+            'SPX (S&P 500)': '^GSPC',
+            'NDX (Nasdaq 100)': '^NDX',
+            'HSI (Hang Seng)': '^HSI'
         }
         
         data = {}
-        
-        for name, tickers in indices.items():
-            success = False
-            for ticker in tickers:
-                try:
-                    df = yf.download(ticker, start=start_date, end=end_date, progress=False)
-                    
-                    if name == 'HSTECH (Hang Seng TECH)':
-                        st.write(f"DEBUG: Trying ticker {ticker}")
-                        st.write(f"DEBUG: Got {len(df) if not df.empty else 0} rows")
-                    
-                    if not df.empty and len(df) > 10:
-                        close = df['Close'].squeeze() if isinstance(df['Close'], pd.DataFrame) else df['Close']
-                        clean_data = close.dropna()
-                        if len(clean_data) > 10:
-                            data[name] = clean_data
-                            success = True
-                            if name == 'HSTECH (Hang Seng TECH)':
-                                st.success(f"Successfully fetched {ticker}: {len(clean_data)} days")
-                            break
-                except Exception as e:
-                    if name == 'HSTECH (Hang Seng TECH)':
-                        st.write(f"DEBUG: Error with {ticker}: {str(e)}")
-                    continue
-            
-            if not success:
+        for name, ticker in indices.items():
+            try:
+                df = yf.download(ticker, start=start_date, end=end_date, progress=False)
+                if not df.empty:
+                    close = df['Close'].squeeze() if isinstance(df['Close'], pd.DataFrame) else df['Close']
+                    clean_data = close.dropna()
+                    data[name] = clean_data
+                else:
+                    data[name] = None
+            except Exception as e:
                 data[name] = None
         
         return data
