@@ -38,35 +38,41 @@ def get_latest_month_end():
     
     return get_month_end_date(target_year, target_month)
 
-# Function to calculate monthly percentage return from month-end prices
-def calc_monthly_return(data, months_back, reference_date):
-    """Calculate return over specified months using month-end data"""
+# Function to calculate IRX compounded return over N months
+def calc_irx_compound_return(irx_monthly, months_back, reference_date):
+    """
+    Calculate compounded T-Bill return using IRX yields
+    Uses previous month's yield to calculate current month's return (backward-looking)
+    """
     try:
-        # Get reference month-end price
-        ref_prices = data[data.index <= reference_date]
-        if len(ref_prices) == 0:
+        # Get month-end IRX values up to reference date
+        irx_values = irx_monthly[irx_monthly.index <= reference_date]
+        
+        if len(irx_values) < months_back + 1:  # Need one extra for the lag
             return None
-        ref_price = ref_prices.iloc[-1]
         
-        # Calculate the target date (months_back before reference)
-        target_year = reference_date.year
-        target_month = reference_date.month - months_back
+        # Get the last N months of IRX yields (these will be used for next month's returns)
+        # We need months_back + 1 values because we use t-1 yield for month t return
+        yields = irx_values.tail(months_back + 1)
         
-        while target_month <= 0:
-            target_month += 12
-            target_year -= 1
+        # Calculate monthly returns: use previous month's yield
+        # Return for month i = (yield[i-1] / 100) / 12
+        monthly_returns = []
+        for i in range(1, len(yields)):
+            prev_yield = yields.iloc[i-1]
+            monthly_return = (prev_yield / 100) / 12
+            monthly_returns.append(monthly_return)
         
-        target_date = get_month_end_date(target_year, target_month)
+        # Compound the returns: (1+r1)*(1+r2)*...*(1+rN) - 1
+        compounded = 1.0
+        for r in monthly_returns:
+            compounded *= (1 + r)
         
-        # Get target month-end price
-        target_prices = data[data.index <= target_date]
-        if len(target_prices) == 0:
-            return None
-        target_price = target_prices.iloc[-1]
+        total_return = (compounded - 1) * 100  # Convert to percentage
         
-        # Calculate percentage return
-        return ((ref_price / target_price) - 1) * 100
-    except:
+        return total_return
+        
+    except Exception as e:
         return None
 
 # Function to calculate moving average
@@ -93,18 +99,22 @@ def fetch_liquidity_data():
         end_date = datetime.now()
         start_date = end_date - timedelta(days=730)
         
-        # Fetch monthly adjusted data
+        # Fetch monthly adjusted data for BND
         bnd_df = yf.download('BND', start=start_date, end=end_date, interval='1mo', progress=False)
-        bil_df = yf.download('BIL', start=start_date, end=end_date, interval='1mo', progress=False)
+        
+        # Fetch daily data for IRX, then we'll extract month-end values
+        irx_df = yf.download('^IRX', start=start_date, end=end_date, progress=False)
         
         # For daily data (TIP, IBIT)
         start_date_daily = end_date - timedelta(days=100)
         tip_df = yf.download('TIP', start=start_date_daily, end=end_date, progress=False)
         ibit_df = yf.download('IBIT', start=start_date_daily, end=end_date, progress=False)
         
-        # Extract adjusted close for monthly data (for total return)
+        # Extract adjusted close for monthly BND data (for total return)
         bnd = bnd_df['Adj Close'].squeeze() if 'Adj Close' in bnd_df else bnd_df['Close'].squeeze()
-        bil = bil_df['Adj Close'].squeeze() if 'Adj Close' in bil_df else bil_df['Close'].squeeze()
+        
+        # Extract IRX close prices (daily)
+        irx_daily = irx_df['Close'].squeeze() if isinstance(irx_df['Close'], pd.DataFrame) else irx_df['Close']
         
         # Extract close for daily data
         tip = tip_df['Close'].squeeze() if isinstance(tip_df['Close'], pd.DataFrame) else tip_df['Close']
@@ -113,15 +123,18 @@ def fetch_liquidity_data():
         # Ensure Series format
         if isinstance(bnd, pd.DataFrame):
             bnd = bnd.iloc[:, 0]
-        if isinstance(bil, pd.DataFrame):
-            bil = bil.iloc[:, 0]
+        if isinstance(irx_daily, pd.DataFrame):
+            irx_daily = irx_daily.iloc[:, 0]
         
         bnd = bnd.dropna()
-        bil = bil.dropna()
+        irx_daily = irx_daily.dropna()
         tip = tip.dropna()
         ibit = ibit.dropna()
         
-        return bnd, bil, tip, ibit
+        # Extract month-end IRX values
+        irx_monthly = irx_daily.resample('M').last().dropna()
+        
+        return bnd, irx_monthly, tip, ibit
     except Exception as e:
         st.error(f"Error fetching liquidity data: {str(e)}")
         return None, None, None, None
@@ -155,14 +168,12 @@ def fetch_trend_data():
     """Fetch trend indicators data for multiple indices"""
     try:
         end_date = datetime.now()
-        # Fetch more data to ensure we have 200+ trading days (need ~300 calendar days minimum)
         start_date = end_date - timedelta(days=500)
         
         indices = {
-            'NDX (Nasdaq 100)': '^NDX',
             'SPX (S&P 500)': '^GSPC',
-            'HSI (Hang Seng)': '^HSI',
-            'HSTECH (Hang Seng TECH)': 'HSTECH.HK'
+            'NDX (Nasdaq 100)': '^NDX',
+            'HSI (Hang Seng)': '^HSI'
         }
         
         data = {}
@@ -176,7 +187,6 @@ def fetch_trend_data():
                 else:
                     data[name] = None
             except Exception as e:
-                st.warning(f"Error fetching {name}: {str(e)}")
                 data[name] = None
         
         return data
@@ -216,17 +226,17 @@ with tab1:
     st.header("Part 1: Liquidity Indicators")
     
     with st.spinner("Fetching liquidity data..."):
-        bnd_data, bil_data, tip_data, ibit_data = fetch_liquidity_data()
+        bnd_data, irx_monthly, tip_data, ibit_data = fetch_liquidity_data()
     
-    if bnd_data is not None and bil_data is not None:
+    if bnd_data is not None and irx_monthly is not None:
         # Get latest month-end reference date
         latest_month_end = get_latest_month_end()
         st.info(f"📅 Using month-end data: {latest_month_end.strftime('%B %Y')} (Updates when next month-end closes)")
         
         scores_liq = {}
         
-        # === INDICATOR 1: BND vs BIL (T-Bill ETF) ===
-        st.subheader("1️⃣ BND Monthly Returns vs BIL (T-Bill ETF)")
+        # === INDICATOR 1: BND vs IRX (T-Bill) ===
+        st.subheader("1️⃣ BND Monthly Returns vs T-Bill (IRX)")
         
         try:
             # Calculate BND returns using month-end adjusted prices
@@ -234,17 +244,17 @@ with tab1:
             bnd_6m = calc_monthly_return(bnd_data, 6, latest_month_end)
             bnd_11m = calc_monthly_return(bnd_data, 11, latest_month_end)
             
-            # Calculate BIL returns using month-end adjusted prices
-            bil_3m = calc_monthly_return(bil_data, 3, latest_month_end)
-            bil_6m = calc_monthly_return(bil_data, 6, latest_month_end)
-            bil_11m = calc_monthly_return(bil_data, 11, latest_month_end)
+            # Calculate IRX compounded returns using backward-looking yields
+            irx_3m = calc_irx_compound_return(irx_monthly, 3, latest_month_end)
+            irx_6m = calc_irx_compound_return(irx_monthly, 6, latest_month_end)
+            irx_11m = calc_irx_compound_return(irx_monthly, 11, latest_month_end)
             
             # Calculate weighted scores
             bnd_weighted = (bnd_3m * 0.33 + bnd_6m * 0.33 + bnd_11m * 0.34)
-            bil_weighted = (bil_3m * 0.33 + bil_6m * 0.33 + bil_11m * 0.34)
+            irx_weighted = (irx_3m * 0.33 + irx_6m * 0.33 + irx_11m * 0.34)
             
             # Score
-            indicator1_score = 1 if bnd_weighted > bil_weighted else 0
+            indicator1_score = 1 if bnd_weighted > irx_weighted else 0
             scores_liq['indicator1'] = indicator1_score
             
             col1, col2 = st.columns(2)
@@ -252,11 +262,11 @@ with tab1:
                 st.metric("BND Weighted Return", f"{bnd_weighted:.2f}%")
                 st.caption(f"3M: {bnd_3m:.2f}% (33%) | 6M: {bnd_6m:.2f}% (33%) | 11M: {bnd_11m:.2f}% (34%)")
             with col2:
-                st.metric("BIL Weighted Return", f"{bil_weighted:.2f}%")
-                st.caption(f"3M: {bil_3m:.2f}% (33%) | 6M: {bil_6m:.2f}% (33%) | 11M: {bil_11m:.2f}% (34%)")
+                st.metric("IRX Weighted Return", f"{irx_weighted:.2f}%")
+                st.caption(f"3M: {irx_3m:.2f}% (33%) | 6M: {irx_6m:.2f}% (33%) | 11M: {irx_11m:.2f}% (34%)")
             
             st.metric("**Score**", f"{indicator1_score}/1", 
-                      delta="✅ BND Outperforming" if indicator1_score == 1 else "❌ BIL Outperforming")
+                      delta="✅ BND Outperforming" if indicator1_score == 1 else "❌ IRX Outperforming")
         except Exception as e:
             st.error(f"Error calculating Indicator 1: {str(e)}")
             scores_liq['indicator1'] = 0
@@ -341,7 +351,7 @@ with tab1:
         st.subheader("📋 Summary")
         summary_df_liq = pd.DataFrame({
             'Indicator': [
-                '1. BND vs BIL',
+                '1. BND vs IRX',
                 '2. TIP MA Cross',
                 '3. IBIT MA Cross',
                 '**TOTAL**'
@@ -596,9 +606,9 @@ with tab3:
         - **Other** (Score 0): All other scenarios
         """)
     
-    # Check if HSTECH manual mode
-    if "Manual" in selected_index:
-        st.info("⚠️ HSTECH data not available via API. Please enter stage manually.")
+    # Check if HSTECH manual mode (if data fetch failed)
+    if selected_index == 'HSTECH (Hang Seng TECH)' and (not index_data or selected_index not in index_data or index_data[selected_index] is None or len(index_data.get(selected_index, [])) < 200):
+        st.warning("⚠️ HSTECH data not available via API. Using manual input.")
         
         manual_stage = st.selectbox(
             "Select HSTECH Stage:",
@@ -624,12 +634,7 @@ with tab3:
         with col2:
             st.metric("Score", f"{indicator2_trend}/1")
     
-    else:
-        # Automated calculation for other indices
-        with st.spinner(f"Fetching {selected_index} data..."):
-            index_data = fetch_trend_data()
-        
-        if index_data and selected_index in index_data:
+    elif index_data and selected_index in index_data:
             # Get selected index data
             data = index_data[selected_index]
             
