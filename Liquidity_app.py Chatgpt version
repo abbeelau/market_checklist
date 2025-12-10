@@ -1,0 +1,152 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+import yfinance as yf
+from datetime import datetime
+
+st.set_page_config(layout="wide")
+
+# =================================================
+# Utilities
+# =================================================
+
+def get_adjusted_close(df):
+    """Return adjusted close safely (yfinance future-proof)"""
+    if 'Adj Close' in df.columns:
+        return df['Adj Close']
+    return df['Close']
+
+
+def calc_monthly_return(price_series, months_back, reference_date):
+    """
+    Backward-looking realised total return using month-end prices
+    """
+    price_series = price_series.dropna()
+
+    if pd.infer_freq(price_series.index) != 'M':
+        price_series = price_series.resample('M').last()
+
+    price_series = price_series[price_series.index <= reference_date]
+
+    if len(price_series) < months_back + 1:
+        return None
+
+    start_price = price_series.iloc[-(months_back + 1)]
+    end_price = price_series.iloc[-1]
+
+    return (end_price / start_price - 1) * 100
+
+
+def calc_irx_monthly_return(irx_series):
+    """
+    Convert annualised IRX yield into realised monthly cash return
+    """
+    irx_series = irx_series.dropna()
+
+    monthly_cash = (1 + irx_series / 100) ** (1 / 12) - 1
+    return monthly_cash
+
+
+# =================================================
+# Fetch data
+# =================================================
+
+@st.cache_data
+def fetch_irx():
+    df = yf.download("^IRX", start="2000-01-01", progress=False)
+    return get_adjusted_close(df)
+
+
+@st.cache_data
+def fetch_bnd():
+    df = yf.download("BND", start="2000-01-01", progress=False)
+    return get_adjusted_close(df)
+
+
+@st.cache_data
+def fetch_sgov():
+    df = yf.download("SGOV", start="2000-01-01", progress=False)
+    return get_adjusted_close(df)
+
+
+# =================================================
+# App
+# =================================================
+
+st.title("📈 Cash vs Bond Realised Return Dashboard")
+
+latest_month_end = pd.Timestamp.today().to_period('M').to_timestamp('M')
+
+# -------------------------------------------------
+# Fetch data
+# -------------------------------------------------
+
+with st.spinner("Fetching data..."):
+    irx = fetch_irx()
+    bnd = fetch_bnd()
+    sgov = fetch_sgov()
+
+# -------------------------------------------------
+# Monthly series
+# -------------------------------------------------
+
+irx_monthly = calc_irx_monthly_return(irx)
+irx_monthly = irx_monthly.resample('M').last()
+
+bnd_monthly_price = bnd.resample('M').last()
+sgov_monthly_price = sgov.resample('M').last()
+
+bnd_monthly_return = bnd_monthly_price.pct_change()
+sgov_monthly_return = sgov_monthly_price.pct_change()
+
+# -------------------------------------------------
+# Display last 12 months
+# -------------------------------------------------
+
+st.header("Last 12 Months — Monthly Total Return (%)")
+
+df_compare = pd.DataFrame({
+    "IRX Cash (Realised)": irx_monthly,
+    "SGOV Total Return": sgov_monthly_return,
+    "BND Total Return": bnd_monthly_return
+}).dropna().tail(12) * 100
+
+st.dataframe(df_compare.round(3), use_container_width=True)
+
+# -------------------------------------------------
+# Trailing returns
+# -------------------------------------------------
+
+st.header("Trailing Total Returns (%)")
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.subheader("IRX Cash")
+    st.metric("3M", round(calc_monthly_return((1 + irx_monthly).cumprod(), 3, latest_month_end), 2))
+    st.metric("6M", round(calc_monthly_return((1 + irx_monthly).cumprod(), 6, latest_month_end), 2))
+    st.metric("12M", round(calc_monthly_return((1 + irx_monthly).cumprod(), 12, latest_month_end), 2))
+
+with col2:
+    st.subheader("SGOV")
+    st.metric("3M", round(calc_monthly_return(sgov, 3, latest_month_end), 2))
+    st.metric("6M", round(calc_monthly_return(sgov, 6, latest_month_end), 2))
+    st.metric("12M", round(calc_monthly_return(sgov, 12, latest_month_end), 2))
+
+with col3:
+    st.subheader("BND")
+    st.metric("3M", round(calc_monthly_return(bnd, 3, latest_month_end), 2))
+    st.metric("6M", round(calc_monthly_return(bnd, 6, latest_month_end), 2))
+    st.metric("12M", round(calc_monthly_return(bnd, 12, latest_month_end), 2))
+
+# -------------------------------------------------
+# Diagnostics
+# -------------------------------------------------
+
+st.header("Diagnostics")
+
+st.write("Average Monthly Returns (%)")
+st.write(df_compare.mean().round(3))
+
+st.write("Annualised (Approx, %) — Monthly Mean × 12")
+st.write((df_compare.mean() * 12).round(3))
