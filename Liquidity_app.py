@@ -178,7 +178,7 @@ def fetch_trend_data():
                         st.write(f"DEBUG: Trying ticker {ticker}")
                         st.write(f"DEBUG: Got {len(df) if not df.empty else 0} rows")
                     
-                    if not df.empty and len(df) > 10:  # Make sure we have meaningful data
+                    if not df.empty and len(df) > 10:
                         close = df['Close'].squeeze() if isinstance(df['Close'], pd.DataFrame) else df['Close']
                         clean_data = close.dropna()
                         if len(clean_data) > 10:
