@@ -4,13 +4,6 @@ import pandas as pd
 from datetime import datetime, timedelta
 import calendar
 
-# Try importing tvDatafeed (optional)
-try:
-    from tvDatafeed import TvDatafeed, Interval
-    TV_AVAILABLE = True
-except:
-    TV_AVAILABLE = False
-
 # Set page configuration
 st.set_page_config(page_title="Market Checklist", layout="centered")
 
@@ -162,27 +155,27 @@ def fetch_trend_data():
     """Fetch trend indicators data for multiple indices"""
     try:
         end_date = datetime.now()
-        # Fetch more data to ensure we have 200+ trading days
         start_date = end_date - timedelta(days=500)
         
-        indices_yf = {
-            'SPX (S&P 500)': ['^GSPC'],
-            'NDX (Nasdaq 100)': ['^NDX'],
-            'HSI (Hang Seng)': ['^HSI']
+        # Map index names to possible ticker symbols
+        indices = {
+            'SPX (S&P 500)': ['^GSPC', 'SPY'],
+            'NDX (Nasdaq 100)': ['^NDX', 'QQQ'],
+            'HSI (Hang Seng)': ['^HSI', '0388.HK'],
+            'HSTECH (Hang Seng TECH)': ['3032.HK', 'HSTECH.HK', '^HSTECH']  # Try ETF and index
         }
         
         data = {}
         
-        # Fetch from Yahoo Finance
-        for name, tickers in indices_yf.items():
+        for name, tickers in indices.items():
             success = False
             for ticker in tickers:
                 try:
-                    df = yf.download(ticker, start=start_date, end=end_date, progress=False, timeout=10)
-                    if not df.empty and len(df) > 0:
+                    df = yf.download(ticker, start=start_date, end=end_date, progress=False)
+                    if not df.empty and len(df) > 10:  # Make sure we have meaningful data
                         close = df['Close'].squeeze() if isinstance(df['Close'], pd.DataFrame) else df['Close']
                         clean_data = close.dropna()
-                        if len(clean_data) > 0:
+                        if len(clean_data) > 10:
                             data[name] = clean_data
                             success = True
                             break
@@ -191,21 +184,6 @@ def fetch_trend_data():
             
             if not success:
                 data[name] = None
-        
-        # Try TradingView for HSTECH if available
-        if TV_AVAILABLE:
-            try:
-                tv = TvDatafeed()
-                # HSTECH symbol in TradingView format
-                hstech_df = tv.get_hist(symbol='HSTECH', exchange='HSI', interval=Interval.in_daily, n_bars=500)
-                if hstech_df is not None and not hstech_df.empty:
-                    data['HSTECH (Hang Seng TECH)'] = hstech_df['close'].dropna()
-                else:
-                    data['HSTECH (Hang Seng TECH)'] = None
-            except Exception as e:
-                data['HSTECH (Hang Seng TECH)'] = None
-        else:
-            data['HSTECH (Hang Seng TECH)'] = None
         
         return data
     except Exception as e:
