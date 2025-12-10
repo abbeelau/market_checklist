@@ -172,14 +172,24 @@ def fetch_trend_data():
             for ticker in tickers:
                 try:
                     df = yf.download(ticker, start=start_date, end=end_date, progress=False)
+                    
+                    # Debug: show what we got
+                    if name == 'HSTECH (Hang Seng TECH)':
+                        st.write(f"DEBUG: Trying ticker {ticker}")
+                        st.write(f"DEBUG: Got {len(df) if not df.empty else 0} rows")
+                    
                     if not df.empty and len(df) > 10:  # Make sure we have meaningful data
                         close = df['Close'].squeeze() if isinstance(df['Close'], pd.DataFrame) else df['Close']
                         clean_data = close.dropna()
                         if len(clean_data) > 10:
                             data[name] = clean_data
                             success = True
+                            if name == 'HSTECH (Hang Seng TECH)':
+                                st.success(f"✅ Successfully fetched {ticker}: {len(clean_data)} days")
                             break
                 except Exception as e:
+                    if name == 'HSTECH (Hang Seng TECH)':
+                        st.write(f"DEBUG: Error with {ticker}: {str(e)}")
                     continue
             
             if not success:
@@ -602,9 +612,9 @@ with tab3:
         - **Other** (Score 0): All other scenarios
         """)
     
-    # Check if HSTECH manual mode
-    if "Manual" in selected_index:
-        st.info("⚠️ HSTECH data not available via API. Please enter stage manually.")
+    # Check if HSTECH manual mode (if data fetch failed)
+    if selected_index == 'HSTECH (Hang Seng TECH)' and (not index_data or selected_index not in index_data or index_data[selected_index] is None or len(index_data.get(selected_index, [])) < 200):
+        st.warning("⚠️ HSTECH data not available via API. Using manual input.")
         
         manual_stage = st.selectbox(
             "Select HSTECH Stage:",
@@ -630,12 +640,7 @@ with tab3:
         with col2:
             st.metric("Score", f"{indicator2_trend}/1")
     
-    else:
-        # Automated calculation for other indices
-        with st.spinner(f"Fetching {selected_index} data..."):
-            index_data = fetch_trend_data()
-        
-        if index_data and selected_index in index_data:
+    elif index_data and selected_index in index_data:
             # Get selected index data
             data = index_data[selected_index]
             
