@@ -155,7 +155,8 @@ def fetch_trend_data():
     """Fetch trend indicators data for multiple indices"""
     try:
         end_date = datetime.now()
-        start_date = end_date - timedelta(days=400)
+        # Fetch more data to ensure we have 200+ trading days (need ~300 calendar days minimum)
+        start_date = end_date - timedelta(days=500)
         
         indices = {
             'NDX (Nasdaq 100)': '^NDX',
@@ -170,7 +171,8 @@ def fetch_trend_data():
                 df = yf.download(ticker, start=start_date, end=end_date, progress=False)
                 if not df.empty:
                     close = df['Close'].squeeze() if isinstance(df['Close'], pd.DataFrame) else df['Close']
-                    data[name] = close.dropna()
+                    clean_data = close.dropna()
+                    data[name] = clean_data
                 else:
                     data[name] = None
             except Exception as e:
