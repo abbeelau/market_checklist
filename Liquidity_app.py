@@ -166,11 +166,15 @@ def fetch_trend_data():
         
         data = {}
         for name, ticker in indices.items():
-            df = yf.download(ticker, start=start_date, end=end_date, progress=False)
-            if not df.empty:
-                close = df['Close'].squeeze() if isinstance(df['Close'], pd.DataFrame) else df['Close']
-                data[name] = close.dropna()
-            else:
+            try:
+                df = yf.download(ticker, start=start_date, end=end_date, progress=False)
+                if not df.empty:
+                    close = df['Close'].squeeze() if isinstance(df['Close'], pd.DataFrame) else df['Close']
+                    data[name] = close.dropna()
+                else:
+                    data[name] = None
+            except Exception as e:
+                st.warning(f"Error fetching {name}: {str(e)}")
                 data[name] = None
         
         return data
@@ -369,26 +373,25 @@ with tab2:
     scores_sent = {}
     
     # === INDICATOR 1: Citi Economic Surprise Index (MANUAL) ===
-    st.subheader("1️⃣ Citi Economic Surprise Index (Manual Input)")
+    st.subheader("1️⃣ Citi Economic Surprise Index")
     
-    st.info("💡 **Scoring Rules**: Value > 0 gets 0.5 points | MoM% positive gets 0.5 points")
+    with st.expander("ℹ️ Scoring Rules", expanded=False):
+        st.write("Value > 0 gets 0.5 points | MoM% positive gets 0.5 points")
     
     col1, col2 = st.columns(2)
     with col1:
         citi_value = st.number_input(
-            "Current Citi Index Value",
+            "Current Value",
             value=0.0,
             step=0.1,
-            format="%.2f",
-            help="Enter the latest Citi Economic Surprise Index value"
+            format="%.2f"
         )
     with col2:
         citi_prev = st.number_input(
-            "Previous Month Value",
+            "Previous Month",
             value=0.0,
             step=0.1,
-            format="%.2f",
-            help="Enter previous month's value for MoM calculation"
+            format="%.2f"
         )
     
     # Calculate score
@@ -400,31 +403,31 @@ with tab2:
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Current Value", f"{citi_value:.2f}", 
+        st.metric("Current", f"{citi_value:.2f}", 
                   delta="Above 0" if citi_value > 0 else "Below 0")
     with col2:
-        st.metric("MoM Change", f"{citi_mom:.2f}%",
-                  delta="Positive" if citi_mom > 0 else "Negative")
+        st.metric("MoM%", f"{citi_mom:.1f}%")
     with col3:
-        st.metric("**Score**", f"{indicator1_sent:.1f}/1",
-                  help=f"Above 0: {score_above_zero} pts | MoM+: {score_mom_positive} pts")
+        st.metric("Score", f"{indicator1_sent:.1f}/1")
     
     st.divider()
     
     # === INDICATOR 2: Russell 3000 Stocks Above 50-Day MA (MANUAL) ===
-    st.subheader("2️⃣ Russell 3000 Stocks Above 50-Day MA")
+    st.subheader("2️⃣ Russell 3000 Above 50-Day MA")
     
-    st.info("📝 Check Barchart: https://www.barchart.com/stocks/quotes/$R3FI/price-history/historical")
-    r3fi_manual = st.number_input("Russell 3000 % Above 50-Day MA", value=50.0, step=0.1, min_value=0.0, max_value=100.0)
+    with st.expander("🔗 Data Source"):
+        st.write("https://www.barchart.com/stocks/quotes/$R3FI/price-history/historical")
+    
+    r3fi_manual = st.number_input("% Above 50-Day MA", value=50.0, step=0.1, min_value=0.0, max_value=100.0)
     indicator2_sent = 1 if r3fi_manual > 50 else 0
     scores_sent['indicator2'] = indicator2_sent
     
     col1, col2 = st.columns(2)
     with col1:
-        st.metric("% Above 50-Day MA", f"{r3fi_manual:.2f}%")
+        st.metric("R3000", f"{r3fi_manual:.1f}%")
     with col2:
-        st.metric("**Score**", f"{indicator2_sent}/1",
-                  delta="✅ Bullish (>50%)" if indicator2_sent == 1 else "❌ Bearish (≤50%)")
+        st.metric("Score", f"{indicator2_sent}/1",
+                  delta="✅ >50%" if indicator2_sent == 1 else "❌ ≤50%")
     
     st.divider()
     
@@ -447,11 +450,11 @@ with tab2:
             
             col1, col2 = st.columns(2)
             with col1:
-                st.metric("XLY/XLP 3-day MA", f"{ratio_3ma:.4f}")
+                st.metric("3-day MA", f"{ratio_3ma:.4f}")
             with col2:
-                st.metric("XLY/XLP 8-day MA", f"{ratio_8ma:.4f}")
+                st.metric("8-day MA", f"{ratio_8ma:.4f}")
             
-            st.metric("**Score**", f"{indicator3_sent}/1",
+            st.metric("Score", f"{indicator3_sent}/1",
                       delta="✅ Risk-On" if indicator3_sent == 1 else "❌ Risk-Off")
         except Exception as e:
             st.error(f"Error calculating XLY/XLP ratio: {str(e)}")
@@ -477,11 +480,11 @@ with tab2:
             
             col1, col2 = st.columns(2)
             with col1:
-                st.metric("FFTY 3-day MA", f"${ffty_3ma:.2f}")
+                st.metric("3-day MA", f"${ffty_3ma:.2f}")
             with col2:
-                st.metric("FFTY 8-day MA", f"${ffty_8ma:.2f}")
+                st.metric("8-day MA", f"${ffty_8ma:.2f}")
             
-            st.metric("**Score**", f"{indicator4_sent}/1",
+            st.metric("Score", f"{indicator4_sent}/1",
                       delta="✅ Bullish" if indicator4_sent == 1 else "❌ Bearish")
         except Exception as e:
             st.error(f"Error calculating FFTY: {str(e)}")
@@ -564,7 +567,12 @@ with tab3:
         status_color = "🔴"
     
     scores_trend['indicator1'] = indicator1_trend
-    st.metric(f"**Score** {status_color}", f"{indicator1_trend}/1")
+    
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        st.metric("Trend Status", f"{uptrend_status} {status_color}")
+    with col2:
+        st.metric("Score", f"{indicator1_trend}/1")
     
     st.divider()
     
@@ -589,48 +597,52 @@ with tab3:
     with st.spinner(f"Fetching {selected_index} data..."):
         index_data = fetch_trend_data()
     
-    if index_data:
+    if index_data and selected_index in index_data:
         # Get selected index data
-        data = index_data.get(selected_index)
+        data = index_data[selected_index]
         
         if data is not None and len(data) >= 200:
             try:
-                current_price = data.iloc[-1]
+                current_price = float(data.iloc[-1])
                 ma_50 = calc_ma(data, 50)
                 ma_150 = calc_ma(data, 150)
                 ma_200 = calc_ma(data, 200)
                 
-                stage, score = calculate_stage(current_price, ma_50, ma_150, ma_200)
-                indicator2_trend = score
-                scores_trend['indicator2'] = indicator2_trend
-                
-                # Compact display
-                stage_emoji = "🟢" if score == 1.0 else ("🟡" if score == 0.5 else "🔴")
-                
-                col1, col2 = st.columns([2, 1])
-                with col1:
-                    st.metric(f"{selected_index} Stage", f"{stage} {stage_emoji}")
-                with col2:
-                    st.metric("Score", f"{score}/1")
-                
-                # Compact details
-                with st.expander("📊 Moving Average Details"):
-                    detail_col1, detail_col2 = st.columns(2)
-                    with detail_col1:
-                        st.write(f"**Price:** {current_price:.2f}")
-                        st.write(f"**50 MA:** {ma_50:.2f}")
-                    with detail_col2:
-                        st.write(f"**150 MA:** {ma_150:.2f}")
-                        st.write(f"**200 MA:** {ma_200:.2f}")
+                if ma_50 is None or ma_150 is None or ma_200 is None:
+                    st.warning(f"Unable to calculate moving averages for {selected_index}")
+                    scores_trend['indicator2'] = 0
+                else:
+                    stage, score = calculate_stage(current_price, ma_50, ma_150, ma_200)
+                    indicator2_trend = score
+                    scores_trend['indicator2'] = indicator2_trend
+                    
+                    # Compact display
+                    stage_emoji = "🟢" if score == 1.0 else ("🟡" if score == 0.5 else "🔴")
+                    
+                    col1, col2 = st.columns([2, 1])
+                    with col1:
+                        st.metric(f"{selected_index} Stage", f"{stage} {stage_emoji}")
+                    with col2:
+                        st.metric("Score", f"{score}/1")
+                    
+                    # Compact details
+                    with st.expander("📊 Moving Average Details"):
+                        detail_col1, detail_col2 = st.columns(2)
+                        with detail_col1:
+                            st.write(f"**Price:** {current_price:.2f}")
+                            st.write(f"**50 MA:** {ma_50:.2f}")
+                        with detail_col2:
+                            st.write(f"**150 MA:** {ma_150:.2f}")
+                            st.write(f"**200 MA:** {ma_200:.2f}")
                 
             except Exception as e:
                 st.error(f"Error calculating {selected_index}: {str(e)}")
                 scores_trend['indicator2'] = 0
         else:
-            st.warning(f"Insufficient data for {selected_index}")
+            st.warning(f"Insufficient data for {selected_index} (need 200+ days, got {len(data) if data is not None else 0})")
             scores_trend['indicator2'] = 0
     else:
-        st.error("Unable to fetch index data")
+        st.error(f"Unable to fetch data for {selected_index}")
         scores_trend['indicator2'] = 0
     
     st.divider()
@@ -638,13 +650,13 @@ with tab3:
     # === INDICATOR 3: Market Pulse (MANUAL) ===
     st.subheader("3️⃣ Market Pulse (Manual Input)")
     
-    st.info("""
-    **Market Pulse Stages:**
-    - **Green (Acceleration)**: Price > 10VMA; VWMA8 > VWMA21 > VWMA34
-    - **Grey Strong (Accumulation)**: Price > 10VMA; VWMAs not stacked
-    - **Grey Weak (Distribution)**: Price < 10VMA; VWMAs not stacked
-    - **Red (Deceleration)**: Price < 10VMA; VWMA8 < VWMA21 < VWMA34
-    """)
+    with st.expander("ℹ️ Market Pulse Stages", expanded=False):
+        st.markdown("""
+        - **Green (Acceleration)**: Price > 10VMA; VWMA8 > VWMA21 > VWMA34
+        - **Grey Strong (Accumulation)**: Price > 10VMA; VWMAs not stacked
+        - **Grey Weak (Distribution)**: Price < 10VMA; VWMAs not stacked
+        - **Red (Deceleration)**: Price < 10VMA; VWMA8 < VWMA21 < VWMA34
+        """)
     
     market_pulse = st.selectbox(
         "Select Market Pulse Stage:",
@@ -663,7 +675,12 @@ with tab3:
         pulse_emoji = "🔴"
     
     scores_trend['indicator3'] = indicator3_trend
-    st.metric(f"**Score** {pulse_emoji}", f"{indicator3_trend}/1")
+    
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        st.metric("Market Pulse", f"{market_pulse.split(' - ')[1]} {pulse_emoji}")
+    with col2:
+        st.metric("Score", f"{indicator3_trend}/1")
     
     st.divider()
     
