@@ -27,8 +27,6 @@ def get_month_end_date(year, month):
 def get_latest_month_end():
     """Get the most recent completed month-end"""
     today = datetime.now()
-    # If we're past the 5th of the month, use last month's end
-    # Otherwise use the month before that
     if today.day > 5:
         target_month = today.month - 1 if today.month > 1 else 12
         target_year = today.year if today.month > 1 else today.year - 1
@@ -45,34 +43,55 @@ def calc_irx_compound_return(irx_monthly, months_back, reference_date):
     Uses previous month's yield to calculate current month's return (backward-looking)
     """
     try:
-        # Get month-end IRX values up to reference date
         irx_values = irx_monthly[irx_monthly.index <= reference_date]
         
-        if len(irx_values) < months_back + 1:  # Need one extra for the lag
+        if len(irx_values) < months_back + 1:
             return None
         
-        # Get the last N months of IRX yields (these will be used for next month's returns)
-        # We need months_back + 1 values because we use t-1 yield for month t return
         yields = irx_values.tail(months_back + 1)
         
-        # Calculate monthly returns: use previous month's yield
-        # Return for month i = (yield[i-1] / 100) / 12
         monthly_returns = []
         for i in range(1, len(yields)):
             prev_yield = yields.iloc[i-1]
             monthly_return = (prev_yield / 100) / 12
             monthly_returns.append(monthly_return)
         
-        # Compound the returns: (1+r1)*(1+r2)*...*(1+rN) - 1
         compounded = 1.0
         for r in monthly_returns:
             compounded *= (1 + r)
         
-        total_return = (compounded - 1) * 100  # Convert to percentage
+        total_return = (compounded - 1) * 100
         
         return total_return
         
     except Exception as e:
+        return None
+
+# Function to calculate monthly percentage return from month-end prices
+def calc_monthly_return(data, months_back, reference_date):
+    """Calculate return over specified months using month-end data"""
+    try:
+        ref_prices = data[data.index <= reference_date]
+        if len(ref_prices) == 0:
+            return None
+        ref_price = ref_prices.iloc[-1]
+        
+        target_year = reference_date.year
+        target_month = reference_date.month - months_back
+        
+        while target_month <= 0:
+            target_month += 12
+            target_year -= 1
+        
+        target_date = get_month_end_date(target_year, target_month)
+        
+        target_prices = data[data.index <= target_date]
+        if len(target_prices) == 0:
+            return None
+        target_price = target_prices.iloc[-1]
+        
+        return ((ref_price / target_price) - 1) * 100
+    except:
         return None
 
 # Function to calculate moving average
@@ -82,57 +101,37 @@ def calc_ma(data, period):
         return None
     return data.tail(period).mean()
 
-# Function to calculate VWMA
-def calc_vwma(close_data, volume_data, period):
-    """Calculate Volume Weighted Moving Average"""
-    if len(close_data) < period or len(volume_data) < period:
-        return None
-    recent_close = close_data.tail(period)
-    recent_volume = volume_data.tail(period)
-    return (recent_close * recent_volume).sum() / recent_volume.sum()
-
 @st.cache_data(ttl=3600)
 def fetch_liquidity_data():
     """Fetch liquidity indicators data"""
     try:
-        # Get 2 years of data to ensure we have enough monthly data
         end_date = datetime.now()
         start_date = end_date - timedelta(days=730)
         
-        # Fetch monthly adjusted data for BND
         bnd_df = yf.download('BND', start=start_date, end=end_date, interval='1mo', progress=False)
-        
-        # Fetch daily data for IRX, then we'll extract month-end values
         irx_df = yf.download('^IRX', start=start_date, end=end_date, progress=False)
         
-        # For daily data (TIP, IBIT)
         start_date_daily = end_date - timedelta(days=100)
         tip_df = yf.download('TIP', start=start_date_daily, end=end_date, progress=False)
         ibit_df = yf.download('IBIT', start=start_date_daily, end=end_date, progress=False)
         
-        # Extract adjusted close for monthly BND data (for total return)
         bnd = bnd_df['Adj Close'].squeeze() if 'Adj Close' in bnd_df else bnd_df['Close'].squeeze()
         
-        # Extract IRX close prices (daily)
         irx_daily = irx_df['Close'].squeeze() if isinstance(irx_df['Close'], pd.DataFrame) else irx_df['Close']
+        irx_monthly = irx_daily.resample('M').last().dropna()
         
-        # Extract close for daily data
         tip = tip_df['Close'].squeeze() if isinstance(tip_df['Close'], pd.DataFrame) else tip_df['Close']
         ibit = ibit_df['Close'].squeeze() if isinstance(ibit_df['Close'], pd.DataFrame) else ibit_df['Close']
         
-        # Ensure Series format
         if isinstance(bnd, pd.DataFrame):
             bnd = bnd.iloc[:, 0]
-        if isinstance(irx_daily, pd.DataFrame):
-            irx_daily = irx_daily.iloc[:, 0]
+        if isinstance(irx_monthly, pd.DataFrame):
+            irx_monthly = irx_monthly.iloc[:, 0]
         
         bnd = bnd.dropna()
-        irx_daily = irx_daily.dropna()
+        irx_monthly = irx_monthly.dropna()
         tip = tip.dropna()
         ibit = ibit.dropna()
-        
-        # Extract month-end IRX values
-        irx_monthly = irx_daily.resample('M').last().dropna()
         
         return bnd, irx_monthly, tip, ibit
     except Exception as e:
@@ -202,19 +201,12 @@ def calculate_stage(price, ma50, ma150, ma200):
         ma_150 = float(ma150)
         ma_200 = float(ma200)
         
-        # S2: Price>50MA, 50MA>150MA, 150MA>200MA
         if current_price > ma_50 and ma_50 > ma_150 and ma_150 > ma_200:
             return "S2", 1.0
-        
-        # S1: Price>50MA, 50MA>150MA, 150MA<200MA
         elif current_price > ma_50 and ma_50 > ma_150 and ma_150 < ma_200:
             return "S1", 0.5
-        
-        # S3 Strong: Price>50MA, 50MA<150MA, 150MA>200MA
         elif current_price > ma_50 and ma_50 < ma_150 and ma_150 > ma_200:
             return "S3 Strong", 0.5
-        
-        # All other scenarios
         else:
             return "Other", 0.0
             
@@ -229,31 +221,25 @@ with tab1:
         bnd_data, irx_monthly, tip_data, ibit_data = fetch_liquidity_data()
     
     if bnd_data is not None and irx_monthly is not None:
-        # Get latest month-end reference date
         latest_month_end = get_latest_month_end()
         st.info(f"📅 Using month-end data: {latest_month_end.strftime('%B %Y')} (Updates when next month-end closes)")
         
         scores_liq = {}
         
-        # === INDICATOR 1: BND vs IRX (T-Bill) ===
         st.subheader("1️⃣ BND Monthly Returns vs T-Bill (IRX)")
         
         try:
-            # Calculate BND returns using month-end adjusted prices
             bnd_3m = calc_monthly_return(bnd_data, 3, latest_month_end)
             bnd_6m = calc_monthly_return(bnd_data, 6, latest_month_end)
             bnd_11m = calc_monthly_return(bnd_data, 11, latest_month_end)
             
-            # Calculate IRX compounded returns using backward-looking yields
             irx_3m = calc_irx_compound_return(irx_monthly, 3, latest_month_end)
             irx_6m = calc_irx_compound_return(irx_monthly, 6, latest_month_end)
             irx_11m = calc_irx_compound_return(irx_monthly, 11, latest_month_end)
             
-            # Calculate weighted scores
             bnd_weighted = (bnd_3m * 0.33 + bnd_6m * 0.33 + bnd_11m * 0.34)
             irx_weighted = (irx_3m * 0.33 + irx_6m * 0.33 + irx_11m * 0.34)
             
-            # Score
             indicator1_score = 1 if bnd_weighted > irx_weighted else 0
             scores_liq['indicator1'] = indicator1_score
             
@@ -273,7 +259,6 @@ with tab1:
         
         st.divider()
         
-        # === INDICATOR 2: TIP Moving Averages ===
         st.subheader("2️⃣ TIP: 5-day MA vs 20-day MA")
         
         try:
@@ -300,7 +285,6 @@ with tab1:
         
         st.divider()
         
-        # === INDICATOR 3: IBIT Moving Averages ===
         st.subheader("3️⃣ IBIT: 3-day MA vs 8-day MA")
         
         try:
@@ -327,7 +311,6 @@ with tab1:
         
         st.divider()
         
-        # === TOTAL SCORE ===
         total_score_liq = sum(scores_liq.values())
         st.header("📈 Liquidity Total Score")
         
@@ -347,7 +330,6 @@ with tab1:
             else:
                 st.error("🔴 **Poor Liquidity** - All indicators negative")
         
-        # Summary table
         st.subheader("📋 Summary")
         summary_df_liq = pd.DataFrame({
             'Indicator': [
@@ -384,7 +366,6 @@ with tab2:
     
     scores_sent = {}
     
-    # === INDICATOR 1: Citi Economic Surprise Index (MANUAL) ===
     st.subheader("1️⃣ Citi Economic Surprise Index")
     
     with st.expander("ℹ️ Scoring Rules", expanded=False):
@@ -392,21 +373,10 @@ with tab2:
     
     col1, col2 = st.columns(2)
     with col1:
-        citi_value = st.number_input(
-            "Current Value",
-            value=0.0,
-            step=0.1,
-            format="%.2f"
-        )
+        citi_value = st.number_input("Current Value", value=0.0, step=0.1, format="%.2f")
     with col2:
-        citi_prev = st.number_input(
-            "Previous Month",
-            value=0.0,
-            step=0.1,
-            format="%.2f"
-        )
+        citi_prev = st.number_input("Previous Month", value=0.0, step=0.1, format="%.2f")
     
-    # Calculate score
     score_above_zero = 0.5 if citi_value > 0 else 0
     citi_mom = ((citi_value - citi_prev) / abs(citi_prev)) * 100 if citi_prev != 0 else 0
     score_mom_positive = 0.5 if citi_mom > 0 else 0
@@ -415,8 +385,7 @@ with tab2:
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Current", f"{citi_value:.2f}", 
-                  delta="Above 0" if citi_value > 0 else "Below 0")
+        st.metric("Current", f"{citi_value:.2f}", delta="Above 0" if citi_value > 0 else "Below 0")
     with col2:
         st.metric("MoM%", f"{citi_mom:.1f}%")
     with col3:
@@ -424,7 +393,6 @@ with tab2:
     
     st.divider()
     
-    # === INDICATOR 2: Russell 3000 Stocks Above 50-Day MA (MANUAL) ===
     st.subheader("2️⃣ Russell 3000 Above 50-Day MA")
     
     with st.expander("🔗 Data Source"):
@@ -438,17 +406,14 @@ with tab2:
     with col1:
         st.metric("R3000", f"{r3fi_manual:.1f}%")
     with col2:
-        st.metric("Score", f"{indicator2_sent}/1",
-                  delta="✅ >50%" if indicator2_sent == 1 else "❌ ≤50%")
+        st.metric("Score", f"{indicator2_sent}/1", delta="✅ >50%" if indicator2_sent == 1 else "❌ ≤50%")
     
     st.divider()
     
-    # === INDICATOR 3: XLY/XLP Ratio ===
     st.subheader("3️⃣ XLY/XLP Ratio: 3-day MA vs 8-day MA")
     
     if xly_data is not None and xlp_data is not None:
         try:
-            # Calculate XLY/XLP ratio
             xly_xlp_ratio = xly_data / xlp_data
             
             ratio_3ma = calc_ma(xly_xlp_ratio, 3)
@@ -466,8 +431,7 @@ with tab2:
             with col2:
                 st.metric("8-day MA", f"{ratio_8ma:.4f}")
             
-            st.metric("Score", f"{indicator3_sent}/1",
-                      delta="✅ Risk-On" if indicator3_sent == 1 else "❌ Risk-Off")
+            st.metric("Score", f"{indicator3_sent}/1", delta="✅ Risk-On" if indicator3_sent == 1 else "❌ Risk-Off")
         except Exception as e:
             st.error(f"Error calculating XLY/XLP ratio: {str(e)}")
             scores_sent['indicator3'] = 0
@@ -476,7 +440,6 @@ with tab2:
     
     st.divider()
     
-    # === INDICATOR 4: FFTY ===
     st.subheader("4️⃣ FFTY: 3-day MA vs 8-day MA")
     
     if ffty_data is not None:
@@ -496,8 +459,7 @@ with tab2:
             with col2:
                 st.metric("8-day MA", f"${ffty_8ma:.2f}")
             
-            st.metric("Score", f"{indicator4_sent}/1",
-                      delta="✅ Bullish" if indicator4_sent == 1 else "❌ Bearish")
+            st.metric("Score", f"{indicator4_sent}/1", delta="✅ Bullish" if indicator4_sent == 1 else "❌ Bearish")
         except Exception as e:
             st.error(f"Error calculating FFTY: {str(e)}")
             scores_sent['indicator4'] = 0
@@ -506,7 +468,6 @@ with tab2:
     
     st.divider()
     
-    # === TOTAL SCORE ===
     total_score_sent = sum(scores_sent.values())
     st.header("🎭 Sentiment Total Score")
     
@@ -526,7 +487,6 @@ with tab2:
         else:
             st.error("🔴 **Negative Sentiment** - Bearish signals")
     
-    # Summary table
     st.subheader("📋 Summary")
     summary_df_sent = pd.DataFrame({
         'Indicator': [
@@ -559,7 +519,6 @@ with tab3:
     
     scores_trend = {}
     
-    # === INDICATOR 1: Manual Uptrend Confirmation ===
     st.subheader("1️⃣ Uptrend Confirmation (Manual)")
     
     uptrend_status = st.selectbox(
@@ -588,13 +547,11 @@ with tab3:
     
     st.divider()
     
-    # === INDICATOR 2: Stage 2 Multi-Index ===
     st.subheader("2️⃣ Stage 2 Indicator")
     
-    # Index selector
     selected_index = st.selectbox(
         "Select Index to Analyze:",
-        ['NDX (Nasdaq 100)', 'SPX (S&P 500)', 'HSI (Hang Seng)', 'HSTECH (Hang Seng TECH) - Manual'],
+        ['SPX (S&P 500)', 'NDX (Nasdaq 100)', 'HSI (Hang Seng)', 'HSTECH (Hang Seng TECH) - Manual'],
         help="Choose which index to use for Stage 2 calculation"
     )
     
@@ -606,15 +563,10 @@ with tab3:
         - **Other** (Score 0): All other scenarios
         """)
     
-    # Check if HSTECH manual mode (if data fetch failed)
-    if selected_index == 'HSTECH (Hang Seng TECH)' and (not index_data or selected_index not in index_data or index_data[selected_index] is None or len(index_data.get(selected_index, [])) < 200):
-        st.warning("⚠️ HSTECH data not available via API. Using manual input.")
+    if "Manual" in selected_index:
+        st.info("📝 HSTECH requires manual input. Check TradingView: HSI:HSTECH")
         
-        manual_stage = st.selectbox(
-            "Select HSTECH Stage:",
-            ["S2", "S1", "S3 Strong", "Other"],
-            help="Check TradingView or other sources for HSTECH stage"
-        )
+        manual_stage = st.selectbox("Select HSTECH Stage:", ["S2", "S1", "S3 Strong", "Other"])
         
         if manual_stage == "S2":
             indicator2_trend = 1.0
@@ -634,8 +586,11 @@ with tab3:
         with col2:
             st.metric("Score", f"{indicator2_trend}/1")
     
-    elif index_data and selected_index in index_data:
-            # Get selected index data
+    else:
+        with st.spinner(f"Fetching {selected_index} data..."):
+            index_data = fetch_trend_data()
+        
+        if index_data and selected_index in index_data:
             data = index_data[selected_index]
             
             if data is not None and len(data) >= 200:
@@ -653,7 +608,6 @@ with tab3:
                         indicator2_trend = score
                         scores_trend['indicator2'] = indicator2_trend
                         
-                        # Compact display
                         stage_emoji = "🟢" if score == 1.0 else ("🟡" if score == 0.5 else "🔴")
                         
                         col1, col2 = st.columns([2, 1])
@@ -662,162 +616,156 @@ with tab3:
                         with col2:
                             st.metric("Score", f"{score}/1")
                         
-                        # Compact details
                         with st.expander("📊 Moving Average Details"):
                             detail_col1, detail_col2 = st.columns(2)
-                            with detail_col1:
-                                st.write(f"**Price:** {current_price:.2f}")
-                                st.write(f"**50 MA:** {ma_50:.2f}")
-                            with detail_col2:
-                                st.write(f"**150 MA:** {ma_150:.2f}")
-                                st.write(f"**200 MA:** {ma_200:.2f}")
-                    
-                except Exception as e:
-                    st.error(f"Error calculating {selected_index}: {str(e)}")
-                    scores_trend['indicator2'] = 0
-            else:
-                st.warning(f"Insufficient data for {selected_index} (need 200+ days, got {len(data) if data is not None else 0})")
+                            with detail_<function_calls>
+<invoke name="artifacts">
+<parameter name="command">update</parameter>
+<parameter name="id">market_checklist_v1</parameter>
+<parameter name="old_str">                        with st.expander("📊 Moving Average Details"):
+detail_col1, detail_col2 = st.columns(2)
+with detail_</parameter>
+<parameter name="new_str">                        with st.expander("📊 Moving Average Details"):
+detail_col1, detail_col2 = st.columns(2)
+with detail_col1:
+st.write(f"Price: {current_price:.2f}")
+st.write(f"50 MA: {ma_50:.2f}")
+with detail_col2:
+st.write(f"150 MA: {ma_150:.2f}")
+st.write(f"200 MA: {ma_200:.2f}")
+            except Exception as e:
+                st.error(f"Error calculating {selected_index}: {str(e)}")
                 scores_trend['indicator2'] = 0
         else:
-            st.error(f"Unable to fetch data for {selected_index}")
+            st.warning(f"Insufficient data for {selected_index}")
             scores_trend['indicator2'] = 0
-    
-    st.divider()
-    
-    # === INDICATOR 3: Market Pulse (MANUAL) ===
-    st.subheader("3️⃣ Market Pulse (Manual Input)")
-    
-    with st.expander("ℹ️ Market Pulse Stages", expanded=False):
-        st.markdown("""
-        - **Green (Acceleration)**: Price > 10VMA; VWMA8 > VWMA21 > VWMA34
-        - **Grey Strong (Accumulation)**: Price > 10VMA; VWMAs not stacked
-        - **Grey Weak (Distribution)**: Price < 10VMA; VWMAs not stacked
-        - **Red (Deceleration)**: Price < 10VMA; VWMA8 < VWMA21 < VWMA34
-        """)
-    
-    market_pulse = st.selectbox(
-        "Select Market Pulse Stage:",
-        ["Green - Acceleration", "Grey Strong - Accumulation", "Grey Weak - Distribution", "Red - Deceleration"],
-        help="Check TradingView Market Pulse indicator"
-    )
-    
-    if market_pulse == "Green - Acceleration":
-        indicator3_trend = 1.0
-        pulse_emoji = "🟢"
-    elif market_pulse == "Grey Strong - Accumulation":
-        indicator3_trend = 0.5
-        pulse_emoji = "🟡"
     else:
-        indicator3_trend = 0.0
-        pulse_emoji = "🔴"
-    
-    scores_trend['indicator3'] = indicator3_trend
-    
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        st.metric("Market Pulse", f"{market_pulse.split(' - ')[1]} {pulse_emoji}")
-    with col2:
-        st.metric("Score", f"{indicator3_trend}/1")
-    
-    st.divider()
-    
-    # === TOTAL SCORE ===
-    total_score_trend = sum(scores_trend.values())
-    max_score_trend = 3.0
-    st.header("📊 Trend Total Score")
-    
-    col1, col2, col3 = st.columns([1, 1, 2])
-    with col1:
-        st.metric("Total Score", f"{total_score_trend:.2f}/{max_score_trend}")
-    with col2:
-        percentage_trend = (total_score_trend / max_score_trend) * 100
-        st.metric("Percentage", f"{percentage_trend:.0f}%")
-    with col3:
-        if total_score_trend >= 2.5:
-            st.success("🟢 **Strong Uptrend** - Bullish across indicators")
-        elif total_score_trend >= 1.5:
-            st.info("🟡 **Mixed Trend** - Some bullish signals")
-        elif total_score_trend >= 0.5:
-            st.warning("🟠 **Weak Trend** - Limited bullish signals")
-        else:
-            st.error("🔴 **Downtrend** - Bearish signals")
-    
-    # Summary table
-    st.subheader("📋 Summary")
-    summary_df_trend = pd.DataFrame({
-        'Indicator': [
-            '1. Uptrend Confirmation',
-            '2. Stage 2 (Multi-Index)',
-            '3. Market Pulse',
-            '**TOTAL**'
-        ],
-        'Score': [
-            f"{scores_trend['indicator1']:.1f}/1",
-            f"{scores_trend['indicator2']:.2f}/1",
-            f"{scores_trend['indicator3']:.1f}/1",
-            f"**{total_score_trend:.2f}/3**"
-        ],
-        'Status': [
-            '✅' if scores_trend['indicator1'] >= 0.5 else '❌',
-            '✅' if scores_trend['indicator2'] >= 0.5 else '❌',
-            '✅' if scores_trend['indicator3'] >= 0.5 else '❌',
-            f"**{percentage_trend:.0f}%**"
-        ]
-    })
-    st.table(summary_df_trend)
+        st.error(f"Unable to fetch data for {selected_index}")
+        scores_trend['indicator2'] = 0
 
-# ==================== OVERALL SUMMARY ====================
+st.divider()
+
+st.subheader("3️⃣ Market Pulse (Manual Input)")
+
+with st.expander("ℹ️ Market Pulse Stages", expanded=False):
+    st.markdown("""
+    - **Green (Acceleration)**: Price > 10VMA; VWMA8 > VWMA21 > VWMA34
+    - **Grey Strong (Accumulation)**: Price > 10VMA; VWMAs not stacked
+    - **Grey Weak (Distribution)**: Price < 10VMA; VWMAs not stacked
+    - **Red (Deceleration)**: Price < 10VMA; VWMA8 < VWMA21 < VWMA34
+    """)
+
+market_pulse = st.selectbox(
+    "Select Market Pulse Stage:",
+    ["Green - Acceleration", "Grey Strong - Accumulation", "Grey Weak - Distribution", "Red - Deceleration"]
+)
+
+if market_pulse == "Green - Acceleration":
+    indicator3_trend = 1.0
+    pulse_emoji = "🟢"
+elif market_pulse == "Grey Strong - Accumulation":
+    indicator3_trend = 0.5
+    pulse_emoji = "🟡"
+else:
+    indicator3_trend = 0.0
+    pulse_emoji = "🔴"
+
+scores_trend['indicator3'] = indicator3_trend
+
+col1, col2 = st.columns([2, 1])
+with col1:
+    st.metric("Market Pulse", f"{market_pulse.split(' - ')[1]} {pulse_emoji}")
+with col2:
+    st.metric("Score", f"{indicator3_trend}/1")
+
+st.divider()
+
+total_score_trend = sum(scores_trend.values())
+max_score_trend = 3.0
+st.header("📊 Trend Total Score")
+
+col1, col2, col3 = st.columns([1, 1, 2])
+with col1:
+    st.metric("Total Score", f"{total_score_trend:.2f}/{max_score_trend}")
+with col2:
+    percentage_trend = (total_score_trend / max_score_trend) * 100
+    st.metric("Percentage", f"{percentage_trend:.0f}%")
+with col3:
+    if total_score_trend >= 2.5:
+        st.success("🟢 **Strong Uptrend** - Bullish across indicators")
+    elif total_score_trend >= 1.5:
+        st.info("🟡 **Mixed Trend** - Some bullish signals")
+    elif total_score_trend >= 0.5:
+        st.warning("🟠 **Weak Trend** - Limited bullish signals")
+    else:
+        st.error("🔴 **Downtrend** - Bearish signals")
+
+st.subheader("📋 Summary")
+summary_df_trend = pd.DataFrame({
+    'Indicator': [
+        '1. Uptrend Confirmation',
+        '2. Stage 2 (Selected Index)',
+        '3. Market Pulse',
+        '**TOTAL**'
+    ],
+    'Score': [
+        f"{scores_trend['indicator1']:.1f}/1",
+        f"{scores_trend['indicator2']:.2f}/1",
+        f"{scores_trend['indicator3']:.1f}/1",
+        f"**{total_score_trend:.2f}/3**"
+    ],
+    'Status': [
+        '✅' if scores_trend['indicator1'] >= 0.5 else '❌',
+        '✅' if scores_trend['indicator2'] >= 0.5 else '❌',
+        '✅' if scores_trend['indicator3'] >= 0.5 else '❌',
+        f"**{percentage_trend:.0f}%**"
+    ]
+})
+st.table(summary_df_trend)
+==================== OVERALL SUMMARY ====================
 st.divider()
 st.header("🎯 Overall Market Checklist Summary")
-
-# Calculate overall metrics
 try:
-    overall_score = (
-        scores_liq.get('indicator1', 0) + scores_liq.get('indicator2', 0) + scores_liq.get('indicator3', 0) +
-        scores_sent.get('indicator1', 0) + scores_sent.get('indicator2', 0) + scores_sent.get('indicator3', 0) + scores_sent.get('indicator4', 0) +
-        scores_trend.get('indicator1', 0) + scores_trend.get('indicator2', 0) + scores_trend.get('indicator3', 0)
-    )
-    max_overall = 10.0
-    overall_percentage = (overall_score / max_overall) * 100
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("💧 Liquidity", f"{sum(scores_liq.values()):.0f}/3", 
-                 f"{(sum(scores_liq.values())/3*100):.0f}%")
-    
-    with col2:
-        st.metric("🎭 Sentiment", f"{sum(scores_sent.values()):.1f}/4",
-                 f"{(sum(scores_sent.values())/4*100):.0f}%")
-    
-    with col3:
-        st.metric("📊 Trend", f"{sum(scores_trend.values()):.2f}/3",
-                 f"{(sum(scores_trend.values())/3*100):.0f}%")
-    
-    with col4:
-        st.metric("🎯 **OVERALL**", f"**{overall_score:.2f}/10**",
-                 f"**{overall_percentage:.0f}%**")
-    
-    # Overall assessment
-    st.subheader("Market Assessment")
-    if overall_percentage >= 80:
-        st.success("🟢 **VERY BULLISH** - Strong across all categories")
-    elif overall_percentage >= 60:
-        st.success("🟢 **BULLISH** - Positive market conditions")
-    elif overall_percentage >= 40:
-        st.info("🟡 **NEUTRAL** - Mixed market signals")
-    elif overall_percentage >= 20:
-        st.warning("🟠 **CAUTIOUS** - Weak market conditions")
-    else:
-        st.error("🔴 **BEARISH** - Negative across categories")
-    
-except Exception as e:
-    st.error(f"Error calculating overall summary: {str(e)}")
+overall_score = (
+scores_liq.get('indicator1', 0) + scores_liq.get('indicator2', 0) + scores_liq.get('indicator3', 0) +
+scores_sent.get('indicator1', 0) + scores_sent.get('indicator2', 0) + scores_sent.get('indicator3', 0) + scores_sent.get('indicator4', 0) +
+scores_trend.get('indicator1', 0) + scores_trend.get('indicator2', 0) + scores_trend.get('indicator3', 0)
+)
+max_overall = 10.0
+overall_percentage = (overall_score / max_overall) * 100
+col1, col2, col3, col4 = st.columns(4)
 
-# Refresh button
+with col1:
+    st.metric("💧 Liquidity", f"{sum(scores_liq.values()):.0f}/3", 
+             f"{(sum(scores_liq.values())/3*100):.0f}%")
+
+with col2:
+    st.metric("🎭 Sentiment", f"{sum(scores_sent.values()):.1f}/4",
+             f"{(sum(scores_sent.values())/4*100):.0f}%")
+
+with col3:
+    st.metric("📊 Trend", f"{sum(scores_trend.values()):.2f}/3",
+             f"{(sum(scores_trend.values())/3*100):.0f}%")
+
+with col4:
+    st.metric("🎯 **OVERALL**", f"**{overall_score:.2f}/10**",
+             f"**{overall_percentage:.0f}%**")
+
+st.subheader("Market Assessment")
+if overall_percentage >= 80:
+    st.success("🟢 **VERY BULLISH** - Strong across all categories")
+elif overall_percentage >= 60:
+    st.success("🟢 **BULLISH** - Positive market conditions")
+elif overall_percentage >= 40:
+    st.info("🟡 **NEUTRAL** - Mixed market signals")
+elif overall_percentage >= 20:
+    st.warning("🟠 **CAUTIOUS** - Weak market conditions")
+else:
+    st.error("🔴 **BEARISH** - Negative across categories")
+except Exception as e:
+st.error(f"Error calculating overall summary: {str(e)}")
 st.divider()
 if st.button("🔄 Refresh All Data"):
-    st.cache_data.clear()
-    st.rerun()
-
-st.caption("⚠️ This is for educational purposes only. Not financial advice.")
+st.cache_data.clear()
+st.rerun()
+st.caption("⚠️ This is for educational purposes only. Not financial advice.")</parameter>
