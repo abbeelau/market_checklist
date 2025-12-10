@@ -155,12 +155,14 @@ def fetch_trend_data():
     """Fetch trend indicators data for multiple indices"""
     try:
         end_date = datetime.now()
+        # Fetch more data to ensure we have 200+ trading days (need ~300 calendar days minimum)
         start_date = end_date - timedelta(days=500)
         
         indices = {
-            'SPX (S&P 500)': '^GSPC',
             'NDX (Nasdaq 100)': '^NDX',
-            'HSI (Hang Seng)': '^HSI'
+            'SPX (S&P 500)': '^GSPC',
+            'HSI (Hang Seng)': '^HSI',
+            'HSTECH (Hang Seng TECH)': 'HSTECH.HK'
         }
         
         data = {}
@@ -174,6 +176,7 @@ def fetch_trend_data():
                 else:
                     data[name] = None
             except Exception as e:
+                st.warning(f"Error fetching {name}: {str(e)}")
                 data[name] = None
         
         return data
@@ -593,9 +596,9 @@ with tab3:
         - **Other** (Score 0): All other scenarios
         """)
     
-    # Check if HSTECH manual mode (if data fetch failed)
-    if selected_index == 'HSTECH (Hang Seng TECH)' and (not index_data or selected_index not in index_data or index_data[selected_index] is None or len(index_data.get(selected_index, [])) < 200):
-        st.warning("⚠️ HSTECH data not available via API. Using manual input.")
+    # Check if HSTECH manual mode
+    if "Manual" in selected_index:
+        st.info("⚠️ HSTECH data not available via API. Please enter stage manually.")
         
         manual_stage = st.selectbox(
             "Select HSTECH Stage:",
@@ -621,7 +624,12 @@ with tab3:
         with col2:
             st.metric("Score", f"{indicator2_trend}/1")
     
-    elif index_data and selected_index in index_data:
+    else:
+        # Automated calculation for other indices
+        with st.spinner(f"Fetching {selected_index} data..."):
+            index_data = fetch_trend_data()
+        
+        if index_data and selected_index in index_data:
             # Get selected index data
             data = index_data[selected_index]
             
