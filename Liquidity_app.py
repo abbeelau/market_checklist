@@ -41,18 +41,27 @@ if 'citi_score' not in st.session_state:
 if 'r3fi_manual' not in st.session_state:
     st.session_state.r3fi_manual = 50.0
 
+# After your existing session state initialization (around line 41)
+if 'total_score_liq' not in st.session_state:
+    st.session_state.total_score_liq = 0
+if 'total_score_sent' not in st.session_state:
+    st.session_state.total_score_sent = 0
+if 'total_score_trend' not in st.session_state:
+    st.session_state.total_score_trend = 0
+
 # ==================== OVERALL SUMMARY (TOP) ====================
 st.header("🎯 Overall Market Checklist")
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    st.metric("💧 Liquidity", "—/3", help="Click Liquidity tab for details")
+    st.metric("💧 Liquidity", f"{st.session_state.total_score_liq}/3", help="Click Liquidity tab for details")
 with col2:
-    st.metric("🎭 Sentiment", "—/4", help="Click Sentiment tab for details")
+    st.metric("🎭 Sentiment", f"{st.session_state.total_score_sent:.1f}/4", help="Click Sentiment tab for details")
 with col3:
-    st.metric("📊 Trend", "—/3", help="Click Trend tab for details")
+    st.metric("📊 Trend", f"{st.session_state.total_score_trend:.1f}/3", help="Click Trend tab for details")
 with col4:
-    st.metric("🎯 OVERALL", "—/10", help="Total score across all categories")
+    overall_total = st.session_state.total_score_liq + st.session_state.total_score_sent + st.session_state.total_score_trend
+    st.metric("🎯 OVERALL", f"{overall_total:.1f}/10", help="Total score across all categories")
 
 st.caption("💡 Enter data in each tab below to calculate scores")
 
@@ -411,7 +420,8 @@ with tab1:
         st.divider()
         
         # === TOTAL SCORE ===
-        total_score_liq = sum(scores_liq.values())
+       st.session_state.total_score_liq = sum(scores_liq.values())
+total_score_liq = st.session_state.total_score_liq
         st.header("📈 Liquidity Total Score")
         
         col1, col2, col3 = st.columns(3)
@@ -455,6 +465,7 @@ with tab1:
             st.table(summary_df_liq)
     else:
         st.error("Unable to fetch liquidity data.")
+
 
 # ==================== TAB 2: SENTIMENT ====================
 with tab2:
@@ -592,7 +603,8 @@ with tab2:
     st.markdown("---")
     
     # === TOTAL SCORE ===
-    total_score_sent = sum(scores_sent.values())
+    st.session_state.total_score_sent = sum(scores_sent.values())
+total_score_sent = st.session_state.total_score_sent
     st.markdown("#### 🎭 Sentiment Summary")
     
     col1, col2, col3 = st.columns(3)
@@ -816,7 +828,8 @@ with tab3:
     st.markdown("---")
     
     # === TOTAL SCORE ===
-    total_score_trend = sum(scores_trend.values())
+    st.session_state.total_score_trend = sum(scores_trend.values())
+total_score_trend = st.session_state.total_score_trend
     max_score_trend = 3.0
     st.markdown("#### 📊 Trend Summary")
     
