@@ -50,7 +50,58 @@ if 'total_score_trend' not in st.session_state:
 # ==================== OVERALL SUMMARY (TOP) ====================
 st.header("🎯 Overall Market Checklist")
 
-col1, col2, col3, col4 = st.columns(4)
+# Function to calculate positioning percentage based on score
+def calculate_position_percentage(score):
+    """
+    Calculate position percentage based on total score
+    Score / Positioning%
+    10 / 90%
+    9 / 100%
+    8 / 80%
+    7 / 60%
+    6 / 50%
+    5 / 40%
+    4 and below / proportional scaling
+    """
+    # Define the mapping
+    position_map = {
+        10.0: 90,
+        9.0: 100,
+        8.0: 80,
+        7.0: 60,
+        6.0: 50,
+        5.0: 40
+    }
+    
+    # Round to nearest 0.5 for interpolation
+    rounded_score = round(score * 2) / 2
+    
+    # If exact match exists
+    if rounded_score in position_map:
+        return position_map[rounded_score]
+    
+    # If score is 9 or above, use 100%
+    if rounded_score >= 9:
+        return 100
+    
+    # If score is between mapped values, interpolate
+    if rounded_score > 5:
+        # Find the two nearest values
+        lower = int(rounded_score)
+        upper = lower + 1
+        
+        if lower in position_map and upper in position_map:
+            # Linear interpolation
+            weight = rounded_score - lower
+            return int(position_map[lower] + (position_map[upper] - position_map[lower]) * weight)
+    
+    # For scores below 5, use proportional scaling (0-40%)
+    if rounded_score < 5:
+        return int((rounded_score / 5.0) * 40)
+    
+    return 0
+
+col1, col2, col3, col4, col5 = st.columns(5)
 with col1:
     st.metric("💧 Liquidity", f"{st.session_state.total_score_liq}/3", help="Click Liquidity tab for details")
 with col2:
@@ -60,8 +111,20 @@ with col3:
 with col4:
     overall_total = st.session_state.total_score_liq + st.session_state.total_score_sent + st.session_state.total_score_trend
     st.metric("🎯 OVERALL", f"{overall_total:.1f}/10", help="Total score across all categories")
+with col5:
+    position_pct = calculate_position_percentage(overall_total)
+    st.metric("📍 Position %", f"{position_pct}%", help="Recommended portfolio positioning based on score")
 
 st.caption("💡 Enter data in each tab below to calculate scores")
+
+# Add positioning reference table in an expander
+with st.expander("📊 Score → Position % Reference Table"):
+    reference_df = pd.DataFrame({
+        'Score': ['10', '9', '8', '7', '6', '5', '< 5'],
+        'Position %': ['90%', '100%', '80%', '60%', '50%', '40%', 'Proportional (0-40%)']
+    })
+    st.table(reference_df)
+    st.caption("💡 Scores between mapped values are interpolated linearly")
 
 st.divider()
 
