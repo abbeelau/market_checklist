@@ -69,6 +69,45 @@ def calc_monthly_return(data, months_back, reference_date):
     except:
         return None
 
+# Function to calculate compounded return from IRX yields
+def calc_irx_compounded_return(irx_data, months_back, reference_date):
+    """Calculate compounded return from IRX monthly yields"""
+    try:
+        # Get monthly returns for the period
+        monthly_returns = []
+        
+        for i in range(months_back):
+            # Calculate the month we need
+            target_year = reference_date.year
+            target_month = reference_date.month - i
+            
+            while target_month <= 0:
+                target_month += 12
+                target_year -= 1
+            
+            month_end = get_month_end_date(target_year, target_month)
+            
+            # Get IRX value at that month-end
+            month_data = irx_data[irx_data.index <= month_end]
+            if len(month_data) == 0:
+                return None
+            
+            irx_yield = float(month_data.iloc[-1])
+            # Convert annual yield to monthly return: r_monthly = (IRX/100) / 12
+            monthly_return = (irx_yield / 100) / 12
+            monthly_returns.append(monthly_return)
+        
+        # Compound the returns: (1+r1) × (1+r2) × ... × (1+rn) - 1
+        compounded = 1.0
+        for r in monthly_returns:
+            compounded *= (1 + r)
+        
+        # Convert to percentage
+        return (compounded - 1) * 100
+        
+    except Exception as e:
+        return None
+
 # Function to calculate moving average
 def calc_ma(data, period):
     """Calculate moving average"""
@@ -93,18 +132,22 @@ def fetch_liquidity_data():
         end_date = datetime.now()
         start_date = end_date - timedelta(days=730)
         
-        # Fetch monthly adjusted data
+        # Fetch monthly adjusted data for BND
         bnd_df = yf.download('BND', start=start_date, end=end_date, interval='1mo', progress=False)
-        bil_df = yf.download('BIL', start=start_date, end=end_date, interval='1mo', progress=False)
+        
+        # Fetch daily data for IRX (we'll extract month-end values)
+        irx_df = yf.download('^IRX', start=start_date, end=end_date, progress=False)
         
         # For daily data (TIP, IBIT)
         start_date_daily = end_date - timedelta(days=100)
         tip_df = yf.download('TIP', start=start_date_daily, end=end_date, progress=False)
         ibit_df = yf.download('IBIT', start=start_date_daily, end=end_date, progress=False)
         
-        # Extract adjusted close for monthly data (for total return)
+        # Extract adjusted close for BND (for total return)
         bnd = bnd_df['Adj Close'].squeeze() if 'Adj Close' in bnd_df else bnd_df['Close'].squeeze()
-        bil = bil_df['Adj Close'].squeeze() if 'Adj Close' in bil_df else bil_df['Close'].squeeze()
+        
+        # Extract close for IRX
+        irx = irx_df['Close'].squeeze() if isinstance(irx_df['Close'], pd.DataFrame) else irx_df['Close']
         
         # Extract close for daily data
         tip = tip_df['Close'].squeeze() if isinstance(tip_df['Close'], pd.DataFrame) else tip_df['Close']
@@ -113,15 +156,15 @@ def fetch_liquidity_data():
         # Ensure Series format
         if isinstance(bnd, pd.DataFrame):
             bnd = bnd.iloc[:, 0]
-        if isinstance(bil, pd.DataFrame):
-            bil = bil.iloc[:, 0]
+        if isinstance(irx, pd.DataFrame):
+            irx = irx.iloc[:, 0]
         
         bnd = bnd.dropna()
-        bil = bil.dropna()
+        irx = irx.dropna()
         tip = tip.dropna()
         ibit = ibit.dropna()
         
-        return bnd, bil, tip, ibit
+        return bnd, irx, tip, ibit
     except Exception as e:
         st.error(f"Error fetching liquidity data: {str(e)}")
         return None, None, None, None
@@ -159,24 +202,29 @@ def fetch_trend_data():
         start_date = end_date - timedelta(days=500)
         
         indices = {
-            'NDX (Nasdaq 100)': '^NDX',
-            'SPX (S&P 500)': '^GSPC',
-            'HSI (Hang Seng)': '^HSI',
-            'HSTECH (Hang Seng TECH)': 'HSTECH.HK'
+            'NDX (Nasdaq 100)': ['^NDX'],
+            'SPX (S&P 500)': ['^GSPC'],
+            'HSI (Hang Seng)': ['^HSI'],
+            'HSTECH (Hang Seng TECH)': ['HSTECH.HK', '^HSTECH', 'HSI:HSTECH']  # Try multiple formats
         }
         
         data = {}
-        for name, ticker in indices.items():
-            try:
-                df = yf.download(ticker, start=start_date, end=end_date, progress=False)
-                if not df.empty:
-                    close = df['Close'].squeeze() if isinstance(df['Close'], pd.DataFrame) else df['Close']
-                    clean_data = close.dropna()
-                    data[name] = clean_data
-                else:
-                    data[name] = None
-            except Exception as e:
-                st.warning(f"Error fetching {name}: {str(e)}")
+        for name, tickers in indices.items():
+            success = False
+            for ticker in tickers:
+                try:
+                    df = yf.download(ticker, start=start_date, end=end_date, progress=False, timeout=10)
+                    if not df.empty and len(df) > 0:
+                        close = df['Close'].squeeze() if isinstance(df['Close'], pd.DataFrame) else df['Close']
+                        clean_data = close.dropna()
+                        if len(clean_data) > 0:
+                            data[name] = clean_data
+                            success = True
+                            break
+                except Exception as e:
+                    continue
+            
+            if not success:
                 data[name] = None
         
         return data
@@ -216,17 +264,17 @@ with tab1:
     st.header("Part 1: Liquidity Indicators")
     
     with st.spinner("Fetching liquidity data..."):
-        bnd_data, bil_data, tip_data, ibit_data = fetch_liquidity_data()
+        bnd_data, irx_data, tip_data, ibit_data = fetch_liquidity_data()
     
-    if bnd_data is not None and bil_data is not None:
+    if bnd_data is not None and irx_data is not None:
         # Get latest month-end reference date
         latest_month_end = get_latest_month_end()
         st.info(f"📅 Using month-end data: {latest_month_end.strftime('%B %Y')} (Updates when next month-end closes)")
         
         scores_liq = {}
         
-        # === INDICATOR 1: BND vs BIL (T-Bill ETF) ===
-        st.subheader("1️⃣ BND Monthly Returns vs BIL (T-Bill ETF)")
+        # === INDICATOR 1: BND vs IRX (T-Bill) ===
+        st.subheader("1️⃣ BND Monthly Returns vs T-Bill (IRX)")
         
         try:
             # Calculate BND returns using month-end adjusted prices
@@ -234,17 +282,17 @@ with tab1:
             bnd_6m = calc_monthly_return(bnd_data, 6, latest_month_end)
             bnd_11m = calc_monthly_return(bnd_data, 11, latest_month_end)
             
-            # Calculate BIL returns using month-end adjusted prices
-            bil_3m = calc_monthly_return(bil_data, 3, latest_month_end)
-            bil_6m = calc_monthly_return(bil_data, 6, latest_month_end)
-            bil_11m = calc_monthly_return(bil_data, 11, latest_month_end)
+            # Calculate IRX compounded returns
+            irx_3m = calc_irx_compounded_return(irx_data, 3, latest_month_end)
+            irx_6m = calc_irx_compounded_return(irx_data, 6, latest_month_end)
+            irx_11m = calc_irx_compounded_return(irx_data, 11, latest_month_end)
             
             # Calculate weighted scores
             bnd_weighted = (bnd_3m * 0.33 + bnd_6m * 0.33 + bnd_11m * 0.34)
-            bil_weighted = (bil_3m * 0.33 + bil_6m * 0.33 + bil_11m * 0.34)
+            irx_weighted = (irx_3m * 0.33 + irx_6m * 0.33 + irx_11m * 0.34)
             
             # Score
-            indicator1_score = 1 if bnd_weighted > bil_weighted else 0
+            indicator1_score = 1 if bnd_weighted > irx_weighted else 0
             scores_liq['indicator1'] = indicator1_score
             
             col1, col2 = st.columns(2)
@@ -252,11 +300,11 @@ with tab1:
                 st.metric("BND Weighted Return", f"{bnd_weighted:.2f}%")
                 st.caption(f"3M: {bnd_3m:.2f}% (33%) | 6M: {bnd_6m:.2f}% (33%) | 11M: {bnd_11m:.2f}% (34%)")
             with col2:
-                st.metric("BIL Weighted Return", f"{bil_weighted:.2f}%")
-                st.caption(f"3M: {bil_3m:.2f}% (33%) | 6M: {bil_6m:.2f}% (33%) | 11M: {bil_11m:.2f}% (34%)")
+                st.metric("T-Bill Weighted Return (IRX)", f"{irx_weighted:.2f}%")
+                st.caption(f"3M: {irx_3m:.2f}% (33%) | 6M: {irx_6m:.2f}% (33%) | 11M: {irx_11m:.2f}% (34%)")
             
             st.metric("**Score**", f"{indicator1_score}/1", 
-                      delta="✅ BND Outperforming" if indicator1_score == 1 else "❌ BIL Outperforming")
+                      delta="✅ BND Outperforming" if indicator1_score == 1 else "❌ T-Bill Outperforming")
         except Exception as e:
             st.error(f"Error calculating Indicator 1: {str(e)}")
             scores_liq['indicator1'] = 0
@@ -341,7 +389,7 @@ with tab1:
         st.subheader("📋 Summary")
         summary_df_liq = pd.DataFrame({
             'Indicator': [
-                '1. BND vs BIL',
+                '1. BND vs T-Bill (IRX)',
                 '2. TIP MA Cross',
                 '3. IBIT MA Cross',
                 '**TOTAL**'
