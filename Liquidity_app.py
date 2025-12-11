@@ -505,20 +505,22 @@ with tab2:
         st.write("**Scoring:** Value > 0 = 0.5pts | MoM% positive = 0.5pts")
         st.write("**Check data:** https://en.macromicro.me/charts/45866/global-citi-surprise-index")
     
-    col1, col2 = st.columns(2)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         citi_value = st.number_input(
             "Current Value",
             value=0.0,
             step=0.1,
-            format="%.2f"
+            format="%.2f",
+            key="citi_current"
         )
     with col2:
         citi_prev = st.number_input(
             "Previous Month",
             value=0.0,
             step=0.1,
-            format="%.2f"
+            format="%.2f",
+            key="citi_prev"
         )
     
     # Calculate score
@@ -528,14 +530,12 @@ with tab2:
     indicator1_sent = score_above_zero + score_mom_positive
     scores_sent['indicator1'] = indicator1_sent
     
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Current", f"{citi_value:.2f}", 
-                  delta="Above 0" if citi_value > 0 else "Below 0")
-    with col2:
-        st.metric("MoM%", f"{citi_mom:.1f}%")
     with col3:
-        st.metric("Score", f"{indicator1_sent:.1f}/1")
+        st.metric("MoM%", f"{citi_mom:.1f}%",
+                  delta="Positive" if citi_mom > 0 else "Negative")
+    with col4:
+        st.metric("Score", f"{indicator1_sent:.1f}/1",
+                  delta="✅" if indicator1_sent >= 0.5 else "❌")
     
     st.markdown("---")
     
@@ -545,13 +545,13 @@ with tab2:
     with st.expander("🔗 Data Source"):
         st.write("https://www.barchart.com/stocks/quotes/$R3FI/price-history/historical")
     
-    r3fi_manual = st.number_input("% Above 50-Day MA", value=50.0, step=0.1, min_value=0.0, max_value=100.0)
+    col1, col2 = st.columns(2)
+    with col1:
+        r3fi_manual = st.number_input("% Above 50-Day MA", value=50.0, step=0.1, min_value=0.0, max_value=100.0, key="r3fi_input")
+    
     indicator2_sent = 1 if r3fi_manual > 50 else 0
     scores_sent['indicator2'] = indicator2_sent
     
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("R3000", f"{r3fi_manual:.1f}%")
     with col2:
         st.metric("Score", f"{indicator2_sent}/1",
                   delta="✅ >50%" if indicator2_sent == 1 else "❌ ≤50%")
@@ -575,14 +575,14 @@ with tab2:
             indicator3_sent = 1 if ratio_3ma > ratio_8ma else 0
             scores_sent['indicator3'] = indicator3_sent
             
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("3-day MA", f"{ratio_3ma:.4f}")
             with col2:
                 st.metric("8-day MA", f"{ratio_8ma:.4f}")
-            
-            st.metric("Score", f"{indicator3_sent}/1",
-                      delta="✅ Risk-On" if indicator3_sent == 1 else "❌ Risk-Off")
+            with col3:
+                st.metric("Score", f"{indicator3_sent}/1",
+                          delta="✅ Risk-On" if indicator3_sent == 1 else "❌ Risk-Off")
         except Exception as e:
             st.error(f"Error calculating XLY/XLP ratio: {str(e)}")
             scores_sent['indicator3'] = 0
@@ -605,14 +605,14 @@ with tab2:
             indicator4_sent = 1 if ffty_3ma > ffty_8ma else 0
             scores_sent['indicator4'] = indicator4_sent
             
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("3-day MA", f"${ffty_3ma:.2f}")
             with col2:
                 st.metric("8-day MA", f"${ffty_8ma:.2f}")
-            
-            st.metric("Score", f"{indicator4_sent}/1",
-                      delta="✅ Bullish" if indicator4_sent == 1 else "❌ Bearish")
+            with col3:
+                st.metric("Score", f"{indicator4_sent}/1",
+                          delta="✅ Bullish" if indicator4_sent == 1 else "❌ Bearish")
         except Exception as e:
             st.error(f"Error calculating FFTY: {str(e)}")
             scores_sent['indicator4'] = 0
