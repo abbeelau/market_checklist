@@ -410,16 +410,16 @@ with tab1:
             indicator1_score = 1 if bnd_weighted > irx_weighted else 0
             scores_liq['indicator1'] = indicator1_score
             
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("BND Weighted", f"{bnd_weighted:.2f}%")
                 st.caption(f"3M: {bnd_3m:.2f}% | 6M: {bnd_6m:.2f}% | 11M: {bnd_11m:.2f}%")
             with col2:
                 st.metric("T-Bill Weighted", f"{irx_weighted:.2f}%")
                 st.caption(f"3M: {irx_3m:.2f}% | 6M: {irx_6m:.2f}% | 11M: {irx_11m:.2f}%")
-            
-            st.metric("Score", f"{indicator1_score}/1", 
-                      delta="✅ BND" if indicator1_score == 1 else "❌ T-Bill")
+            with col3:
+                st.metric("Score", f"{indicator1_score}/1", 
+                          delta="✅ BND" if indicator1_score == 1 else "❌ T-Bill")
         except Exception as e:
             st.error(f"Error calculating Indicator 1: {str(e)}")
             scores_liq['indicator1'] = 0
@@ -439,14 +439,14 @@ with tab1:
             indicator2_score = 1 if tip_5ma > tip_20ma else 0
             scores_liq['indicator2'] = indicator2_score
             
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("TIP 5-day MA", f"${tip_5ma:.2f}")
             with col2:
                 st.metric("TIP 20-day MA", f"${tip_20ma:.2f}")
-            
-            st.metric("**Score**", f"{indicator2_score}/1",
-                      delta="✅ Bullish" if indicator2_score == 1 else "❌ Bearish")
+            with col3:
+                st.metric("Score", f"{indicator2_score}/1",
+                          delta="✅ Bullish" if indicator2_score == 1 else "❌ Bearish")
         except Exception as e:
             st.error(f"Error calculating Indicator 2: {str(e)}")
             scores_liq['indicator2'] = 0
@@ -454,7 +454,7 @@ with tab1:
         st.divider()
         
         # === INDICATOR 3: IBIT Moving Averages ===
-        st.subheader("3️⃣ IBIT: 3-day MA vs 8-day MA")
+        st.markdown("##### 3️⃣ IBIT: 3-day MA vs 8-day MA")
         
         try:
             ibit_3ma = calc_ma(ibit_data, 3)
@@ -466,14 +466,14 @@ with tab1:
             indicator3_score = 1 if ibit_3ma > ibit_8ma else 0
             scores_liq['indicator3'] = indicator3_score
             
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("IBIT 3-day MA", f"${ibit_3ma:.2f}")
             with col2:
                 st.metric("IBIT 8-day MA", f"${ibit_8ma:.2f}")
-            
-            st.metric("**Score**", f"{indicator3_score}/1",
-                      delta="✅ Bullish" if indicator3_score == 1 else "❌ Bearish")
+            with col3:
+                st.metric("Score", f"{indicator3_score}/1",
+                          delta="✅ Bullish" if indicator3_score == 1 else "❌ Bearish")
         except Exception as e:
             st.error(f"Error calculating Indicator 3: {str(e)}")
             scores_liq['indicator3'] = 0
@@ -483,48 +483,6 @@ with tab1:
         # === TOTAL SCORE ===
         st.session_state.total_score_liq = sum(scores_liq.values())
         total_score_liq = st.session_state.total_score_liq
-        
-        st.header("📈 Liquidity Total Score")
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total", f"{total_score_liq}/3")
-        with col2:
-            percentage_liq = (total_score_liq / 3) * 100
-            st.metric("Percentage", f"{percentage_liq:.0f}%")
-        with col3:
-            if total_score_liq == 3:
-                st.success("🟢 Strong")
-            elif total_score_liq == 2:
-                st.warning("🟡 Moderate")
-            elif total_score_liq == 1:
-                st.warning("🟠 Weak")
-            else:
-                st.error("🔴 Poor")
-        
-        # Summary table
-        with st.expander("📋 Detailed Summary"):
-            summary_df_liq = pd.DataFrame({
-                'Indicator': [
-                    '1. BND vs T-Bill (IRX)',
-                    '2. TIP MA Cross',
-                    '3. IBIT MA Cross',
-                    '**TOTAL**'
-                ],
-                'Score': [
-                    f"{scores_liq['indicator1']}/1",
-                    f"{scores_liq['indicator2']}/1",
-                    f"{scores_liq['indicator3']}/1",
-                    f"**{total_score_liq}/3**"
-                ],
-                'Status': [
-                    '✅' if scores_liq['indicator1'] == 1 else '❌',
-                    '✅' if scores_liq['indicator2'] == 1 else '❌',
-                    '✅' if scores_liq['indicator3'] == 1 else '❌',
-                    f"**{percentage_liq:.0f}%**"
-                ]
-            })
-            st.table(summary_df_liq)
     else:
         st.error("Unable to fetch liquidity data.")
 
@@ -666,51 +624,6 @@ with tab2:
     # === TOTAL SCORE ===
     st.session_state.total_score_sent = sum(scores_sent.values())
     total_score_sent = st.session_state.total_score_sent
-    
-    st.markdown("#### 🎭 Sentiment Summary")
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total", f"{total_score_sent:.1f}/4")
-    with col2:
-        percentage_sent = (total_score_sent / 4) * 100
-        st.metric("Percentage", f"{percentage_sent:.0f}%")
-    with col3:
-        if total_score_sent >= 3.5:
-            st.success("🟢 Very Positive")
-        elif total_score_sent >= 2.5:
-            st.info("🟡 Positive")
-        elif total_score_sent >= 1.5:
-            st.warning("🟠 Neutral")
-        else:
-            st.error("🔴 Negative")
-    
-    # Summary table
-    with st.expander("📋 Detailed Summary"):
-        summary_df_sent = pd.DataFrame({
-            'Indicator': [
-                '1. Citi Surprise Index',
-                '2. R3000 Above 50-Day MA',
-                '3. XLY/XLP Ratio',
-                '4. FFTY MA Cross',
-                '**TOTAL**'
-            ],
-            'Score': [
-                f"{scores_sent['indicator1']:.1f}/1",
-                f"{scores_sent['indicator2']}/1",
-                f"{scores_sent['indicator3']}/1",
-                f"{scores_sent['indicator4']}/1",
-                f"**{total_score_sent:.1f}/4**"
-            ],
-            'Status': [
-                '✅' if scores_sent['indicator1'] >= 0.5 else '❌',
-                '✅' if scores_sent['indicator2'] == 1 else '❌',
-                '✅' if scores_sent['indicator3'] == 1 else '❌',
-                '✅' if scores_sent['indicator4'] == 1 else '❌',
-                f"**{percentage_sent:.0f}%**"
-            ]
-        })
-        st.table(summary_df_sent)
 
 # ==================== TAB 3: TREND ====================
 with tab3:
@@ -893,48 +806,6 @@ with tab3:
     st.session_state.total_score_trend = sum(scores_trend.values())
     total_score_trend = st.session_state.total_score_trend
     max_score_trend = 3.0
-    
-    st.markdown("#### 📊 Trend Summary")
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total", f"{total_score_trend:.2f}/{max_score_trend}")
-    with col2:
-        percentage_trend = (total_score_trend / max_score_trend) * 100
-        st.metric("Percentage", f"{percentage_trend:.0f}%")
-    with col3:
-        if total_score_trend >= 2.5:
-            st.success("🟢 Strong Uptrend")
-        elif total_score_trend >= 1.5:
-            st.info("🟡 Mixed Trend")
-        elif total_score_trend >= 0.5:
-            st.warning("🟠 Weak Trend")
-        else:
-            st.error("🔴 Downtrend")
-    
-    # Summary table
-    with st.expander("📋 Detailed Summary"):
-        summary_df_trend = pd.DataFrame({
-            'Indicator': [
-                '1. Uptrend Confirmation',
-                '2. Stage 2 (Multi-Index)',
-                '3. Market Pulse',
-                '**TOTAL**'
-            ],
-            'Score': [
-                f"{scores_trend['indicator1']:.1f}/1",
-                f"{scores_trend['indicator2']:.2f}/1",
-                f"{scores_trend['indicator3']:.1f}/1",
-                f"**{total_score_trend:.2f}/3**"
-            ],
-            'Status': [
-                '✅' if scores_trend['indicator1'] >= 0.5 else '❌',
-                '✅' if scores_trend['indicator2'] >= 0.5 else '❌',
-                '✅' if scores_trend['indicator3'] >= 0.5 else '❌',
-                f"**{percentage_trend:.0f}%**"
-            ]
-        })
-        st.table(summary_df_trend)
 
 # ==================== REFRESH BUTTON ====================
 st.markdown("---")
