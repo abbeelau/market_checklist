@@ -838,8 +838,8 @@ try:
                  f"{(sum(scores_trend.values())/3*100):.0f}%")
     
     with col4:
-        st.metric("🎯 **OVERALL**", f"**{overall_score:.2f}/10**",
-                 f"**{overall_percentage:.0f}%**")
+        st.metric("🎯 **OVERALL**", f"{overall_score:.2f}/10",
+                 f"{overall_percentage:.0f}%")
     
     # Overall assessment
     st.subheader("Market Assessment")
