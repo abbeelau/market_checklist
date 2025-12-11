@@ -41,17 +41,6 @@ if 'citi_score' not in st.session_state:
 if 'r3fi_manual' not in st.session_state:
     st.session_state.r3fi_manual = 50.0
 
-# Fetch all data upfront
-with st.spinner("Loading data..."):
-    bnd_data, irx_data, tip_data, ibit_data = fetch_liquidity_data()
-    xly_data, xlp_data, ffty_data = fetch_sentiment_data()
-    index_data = fetch_trend_data()
-
-# Calculate all scores (simplified - will be filled in each section)
-scores_liq = {'indicator1': 0, 'indicator2': 0, 'indicator3': 0}
-scores_sent = {'indicator1': 0, 'indicator2': 0, 'indicator3': 0, 'indicator4': 0}
-scores_trend = {'indicator1': 0, 'indicator2': 0, 'indicator3': 0}
-
 # ==================== OVERALL SUMMARY (TOP) ====================
 st.header("🎯 Overall Market Checklist")
 
@@ -65,7 +54,7 @@ with col3:
 with col4:
     st.metric("🎯 OVERALL", "—/10", help="Total score across all categories")
 
-st.caption("💡 Enter data in each tab below, then refresh to see updated summary")
+st.caption("💡 Enter data in each tab below to calculate scores")
 
 st.divider()
 
@@ -318,6 +307,10 @@ def calculate_stage(price, ma50, ma150, ma200):
 with tab1:
     st.subheader("Part 1: Liquidity Indicators")
     
+    # Fetch data when tab is accessed
+    with st.spinner("Loading liquidity data..."):
+        bnd_data, irx_data, tip_data, ibit_data = fetch_liquidity_data()
+    
     if bnd_data is not None and irx_data is not None:
         # Get latest month-end reference date
         latest_month_end = get_latest_month_end()
@@ -468,6 +461,10 @@ with tab2:
     st.subheader("Part 2: Sentiment Indicators")
     
     st.caption(f"📅 Data last updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    
+    # Fetch data when tab is accessed
+    with st.spinner("Loading sentiment data..."):
+        xly_data, xlp_data, ffty_data = fetch_sentiment_data()
     
     scores_sent = {}
     
@@ -644,6 +641,10 @@ with tab2:
 # ==================== TAB 3: TREND ====================
 with tab3:
     st.subheader("Part 3: Trend Indicators")
+    
+    # Fetch data when tab is accessed
+    with st.spinner("Loading trend data..."):
+        index_data = fetch_trend_data()
     
     scores_trend = {}
     
