@@ -38,25 +38,30 @@ saved_inputs = load_user_inputs()
 st.markdown("""
 <style>
     /* Reduce font sizes */
-    .stMetric label { font-size: 0.9rem !important; }
-    .stMetric .metric-value { font-size: 1.3rem !important; }
-    h1 { font-size: 1.8rem !important; margin-bottom: 0.5rem !important; }
-    h2 { font-size: 1.3rem !important; margin-top: 0.5rem !important; margin-bottom: 0.3rem !important; }
-    h3 { font-size: 1.1rem !important; margin-top: 0.3rem !important; margin-bottom: 0.3rem !important; }
+    .stMetric label { font-size: 0.85rem !important; }
+    .stMetric .metric-value { font-size: 1.2rem !important; }
+    h1 { font-size: 1.6rem !important; margin-bottom: 0.5rem !important; }
+    h2 { font-size: 1.2rem !important; margin-top: 0.5rem !important; margin-bottom: 0.3rem !important; }
+    h3 { font-size: 1.0rem !important; margin-top: 0.3rem !important; margin-bottom: 0.3rem !important; }
+    h4 { font-size: 0.95rem !important; }
+    h5 { font-size: 0.9rem !important; }
     
     /* Reduce spacing */
-    .element-container { margin-bottom: 0.3rem !important; }
-    .stButton button { padding: 0.25rem 0.75rem !important; }
-    div[data-testid="stExpander"] { margin: 0.3rem 0 !important; }
+    .element-container { margin-bottom: 0.2rem !important; }
+    .stButton button { padding: 0.25rem 0.75rem !important; font-size: 0.85rem !important; }
+    div[data-testid="stExpander"] { margin: 0.2rem 0 !important; }
     
     /* Reduce padding in columns */
-    div[data-testid="column"] { padding: 0.3rem !important; }
+    div[data-testid="column"] { padding: 0.2rem !important; }
     
     /* Compact tables */
-    table { font-size: 0.85rem !important; }
+    table { font-size: 0.8rem !important; }
     
     /* Reduce divider spacing */
-    hr { margin: 0.5rem 0 !important; }
+    hr { margin: 0.3rem 0 !important; }
+    
+    /* Compact selectbox */
+    .stSelectbox { margin-bottom: 0.2rem !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -380,7 +385,7 @@ tab1, tab2, tab3 = st.tabs(["💧 Liquidity", "🎭 Sentiment", "📊 Trend"])
 
 # ==================== TAB 1: LIQUIDITY ====================
 with tab1:
-    st.subheader("Part 1: Liquidity Indicators (Same for all indices)")
+    st.markdown("#### Part 1: Liquidity Indicators (Same for all indices)")
     
     with st.spinner("Loading liquidity data..."):
         bnd_data, irx_data, tip_data, ibit_data = fetch_liquidity_data()
@@ -392,7 +397,7 @@ with tab1:
         scores_liq = {}
         
         # === INDICATOR 1: BND vs IRX ===
-        st.markdown("##### 1️⃣ BND vs T-Bill (IRX)")
+        st.markdown("#### 1️⃣ BND vs T-Bill (IRX)")
         
         try:
             bnd_3m = calc_monthly_return(bnd_data, 3, latest_month_end)
@@ -426,7 +431,7 @@ with tab1:
         st.markdown("---")
         
         # === INDICATOR 2: TIP ===
-        st.markdown("##### 2️⃣ TIP: 5-day MA vs 20-day MA")
+        st.markdown("#### 2️⃣ TIP: 5-day MA vs 20-day MA")
         
         try:
             tip_5ma = calc_ma(tip_data, 5)
@@ -453,7 +458,7 @@ with tab1:
         st.divider()
         
         # === INDICATOR 3: IBIT ===
-        st.markdown("##### 3️⃣ IBIT: 3-day MA vs 8-day MA")
+        st.markdown("#### 3️⃣ IBIT: 3-day MA vs 8-day MA")
         
         try:
             ibit_3ma = calc_ma(ibit_data, 3)
@@ -486,7 +491,7 @@ with tab1:
 
 # ==================== TAB 2: SENTIMENT ====================
 with tab2:
-    st.subheader("Part 2: Sentiment Indicators")
+    st.markdown("#### Part 2: Sentiment Indicators")
     
     st.caption(f"📅 Data last updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     
@@ -497,7 +502,7 @@ with tab2:
     scores_sent_hsi = {}
     
     # === INDICATOR 1: Citi Economic Surprise Index (SHARED) ===
-    st.markdown("##### 1️⃣ Citi Economic Surprise Index (Shared)")
+    st.markdown("#### 1️⃣ Citi Economic Surprise Index (Shared)")
     
     with st.expander("ℹ️ Scoring & Data Source"):
         st.write("**Scoring:** Value > 0 = 0.5pts | MoM% positive = 0.5pts")
@@ -547,7 +552,7 @@ with tab2:
     st.markdown("---")
     
     # === INDICATOR 2: Russell 3000 (SHARED) ===
-    st.markdown("##### 2️⃣ Russell 3000 Above 50-Day MA (Shared)")
+    st.markdown("#### 2️⃣ Russell 3000 Above 50-Day MA (Shared)")
     
     with st.expander("🔗 Data Source"):
         st.write("https://www.barchart.com/stocks/quotes/$R3FI/price-history/historical")
@@ -578,7 +583,7 @@ with tab2:
     st.markdown("---")
     
     # === INDICATOR 3: XLY/XLP vs 3109.HK/3437.HK ===
-    st.markdown("##### 3️⃣ Consumer Discretionary/Staples Ratio")
+    st.markdown("#### 3️⃣ Consumer Discretionary/Staples Ratio")
     
     # US Version (XLY/XLP)
     st.markdown("**US Markets (SPX, NDX): XLY/XLP Ratio**")
@@ -642,7 +647,7 @@ with tab2:
     st.markdown("---")
     
     # === INDICATOR 4: FFTY vs 3067.HK ===
-    st.markdown("##### 4️⃣ Innovation/Growth Indicator")
+    st.markdown("#### 4️⃣ Innovation/Growth Indicator")
     
     # US Version (FFTY)
     st.markdown("**US Markets (SPX, NDX): FFTY**")
@@ -714,7 +719,7 @@ with tab2:
 
 # ==================== TAB 3: TREND ====================
 with tab3:
-    st.subheader("Part 3: Trend Indicators")
+    st.markdown("#### Part 3: Trend Indicators")
     
     with st.spinner("Loading trend data..."):
         index_data = fetch_trend_data()
@@ -724,92 +729,82 @@ with tab3:
     scores_trend_hsi = {}
     
     # === INDICATOR 1: Uptrend Confirmation ===
-    st.markdown("##### 1️⃣ Uptrend Confirmation")
+    st.markdown("#### 1️⃣ Uptrend Confirmation")
     
-    # US Markets
-    st.markdown("**US Markets (SPX & NDX)**")
-    uptrend_status_us = st.selectbox(
-        "Select Market Status:",
-        ["Confirmed Uptrend", "Under Pressure/Correction", "Ambiguous Follow-through"],
-        index=["Confirmed Uptrend", "Under Pressure/Correction", "Ambiguous Follow-through"].index(st.session_state.uptrend_status_us),
-        help="Your assessment of the current US market trend",
-        key="uptrend_select_us"
-    )
+    # Row 1: SPX & NDX
+    col1, col2, col3, col4 = st.columns([2, 1, 2, 1])
+    with col1:
+        uptrend_status_us = st.selectbox(
+            "SPX & NDX",
+            ["Confirmed Uptrend", "Under Pressure/Correction", "Ambiguous Follow-through"],
+            index=["Confirmed Uptrend", "Under Pressure/Correction", "Ambiguous Follow-through"].index(st.session_state.uptrend_status_us),
+            key="uptrend_select_us"
+        )
+        
+        if uptrend_status_us != st.session_state.uptrend_status_us:
+            st.session_state.uptrend_status_us = uptrend_status_us
+            saved_inputs['uptrend_status_us'] = uptrend_status_us
+            save_user_inputs(saved_inputs)
     
-    if uptrend_status_us != st.session_state.uptrend_status_us:
-        st.session_state.uptrend_status_us = uptrend_status_us
-        saved_inputs['uptrend_status_us'] = uptrend_status_us
-        save_user_inputs(saved_inputs)
-    
-    if uptrend_status_us == "Confirmed Uptrend":
-        indicator1_us = 1.0
-        status_color_us = "🟢"
-    elif uptrend_status_us == "Ambiguous Follow-through":
-        indicator1_us = 0.5
-        status_color_us = "🟡"
-    else:
-        indicator1_us = 0.0
-        status_color_us = "🔴"
+    with col2:
+        if uptrend_status_us == "Confirmed Uptrend":
+            indicator1_us = 1.0
+            st.metric("Score", f"{indicator1_us}/1", delta="🟢")
+        elif uptrend_status_us == "Ambiguous Follow-through":
+            indicator1_us = 0.5
+            st.metric("Score", f"{indicator1_us}/1", delta="🟡")
+        else:
+            indicator1_us = 0.0
+            st.metric("Score", f"{indicator1_us}/1", delta="🔴")
     
     scores_trend_spx['indicator1'] = indicator1_us
     scores_trend_ndx['indicator1'] = indicator1_us
     
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        st.metric("Trend Status", f"{uptrend_status_us} {status_color_us}")
-    with col2:
-        st.metric("Score", f"{indicator1_us}/1")
+    # Row 2: HSI
+    with col3:
+        uptrend_status_hsi = st.selectbox(
+            "HSI",
+            ["Confirmed Uptrend", "Under Pressure/Correction", "Ambiguous Follow-through"],
+            index=["Confirmed Uptrend", "Under Pressure/Correction", "Ambiguous Follow-through"].index(st.session_state.uptrend_status_hsi),
+            key="uptrend_select_hsi"
+        )
+        
+        if uptrend_status_hsi != st.session_state.uptrend_status_hsi:
+            st.session_state.uptrend_status_hsi = uptrend_status_hsi
+            saved_inputs['uptrend_status_hsi'] = uptrend_status_hsi
+            save_user_inputs(saved_inputs)
     
-    # HSI Market
-    st.markdown("**HK Market (HSI)**")
-    uptrend_status_hsi = st.selectbox(
-        "Select Market Status:",
-        ["Confirmed Uptrend", "Under Pressure/Correction", "Ambiguous Follow-through"],
-        index=["Confirmed Uptrend", "Under Pressure/Correction", "Ambiguous Follow-through"].index(st.session_state.uptrend_status_hsi),
-        help="Your assessment of the current HSI market trend",
-        key="uptrend_select_hsi"
-    )
-    
-    if uptrend_status_hsi != st.session_state.uptrend_status_hsi:
-        st.session_state.uptrend_status_hsi = uptrend_status_hsi
-        saved_inputs['uptrend_status_hsi'] = uptrend_status_hsi
-        save_user_inputs(saved_inputs)
-    
-    if uptrend_status_hsi == "Confirmed Uptrend":
-        indicator1_hsi = 1.0
-        status_color_hsi = "🟢"
-    elif uptrend_status_hsi == "Ambiguous Follow-through":
-        indicator1_hsi = 0.5
-        status_color_hsi = "🟡"
-    else:
-        indicator1_hsi = 0.0
-        status_color_hsi = "🔴"
+    with col4:
+        if uptrend_status_hsi == "Confirmed Uptrend":
+            indicator1_hsi = 1.0
+            st.metric("Score", f"{indicator1_hsi}/1", delta="🟢")
+        elif uptrend_status_hsi == "Ambiguous Follow-through":
+            indicator1_hsi = 0.5
+            st.metric("Score", f"{indicator1_hsi}/1", delta="🟡")
+        else:
+            indicator1_hsi = 0.0
+            st.metric("Score", f"{indicator1_hsi}/1", delta="🔴")
     
     scores_trend_hsi['indicator1'] = indicator1_hsi
-    
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        st.metric("Trend Status", f"{uptrend_status_hsi} {status_color_hsi}")
-    with col2:
-        st.metric("Score", f"{indicator1_hsi}/1")
     
     st.markdown("---")
     
     # === INDICATOR 2: Stage 2 (All 3 Indices) ===
-    st.markdown("##### 2️⃣ Stage 2 Indicator")
+    st.markdown("#### 2️⃣ Stage 2 Indicator")
     
     with st.expander("ℹ️ Stage Definitions", expanded=False):
         st.markdown("""
-        - **S2** (Score 1.0): Price > 50MA, 50MA > 150MA, 150MA > 200MA
-        - **S1** (Score 0.5): Price > 50MA, 50MA > 150MA, 150MA < 200MA
-        - **S3 Strong** (Score 0.5): Price > 50MA, 50MA < 150MA, 150MA > 200MA
-        - **Other** (Score 0): All other scenarios
+        **S2** (1.0): Price > 50MA > 150MA > 200MA | **S1** (0.5): Price > 50MA > 150MA, 150MA < 200MA | **S3 Strong** (0.5): Price > 50MA, 50MA < 150MA > 200MA | **Other** (0): All else
         """)
     
-    # Calculate for all 3 indices
-    for idx_name, idx_key in [('SPX', 'SPX'), ('NDX', 'NDX'), ('HSI', 'HSI')]:
-        st.markdown(f"**{idx_name}**")
-        
+    # Row 1: SPX, NDX, HSI - all in one row
+    col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 1, 1, 1, 1])
+    
+    for idx, (idx_name, idx_key, score_dict, col_stage, col_score) in enumerate([
+        ('SPX', 'SPX', scores_trend_spx, col1, col2),
+        ('NDX', 'NDX', scores_trend_ndx, col3, col4),
+        ('HSI', 'HSI', scores_trend_hsi, col5, col6)
+    ]):
         if index_data and idx_key in index_data:
             data = index_data[idx_key]
             
@@ -821,144 +816,111 @@ with tab3:
                     ma_200 = calc_ma(data, 200)
                     
                     if ma_50 is None or ma_150 is None or ma_200 is None:
-                        st.warning(f"Unable to calculate moving averages for {idx_name}")
-                        if idx_key == 'SPX':
-                            scores_trend_spx['indicator2'] = 0
-                        elif idx_key == 'NDX':
-                            scores_trend_ndx['indicator2'] = 0
-                        else:
-                            scores_trend_hsi['indicator2'] = 0
+                        score_dict['indicator2'] = 0
+                        with col_stage:
+                            st.metric(idx_name, "Error")
+                        with col_score:
+                            st.metric("Score", "0/1")
                     else:
                         stage, score = calculate_stage(current_price, ma_50, ma_150, ma_200)
-                        
-                        if idx_key == 'SPX':
-                            scores_trend_spx['indicator2'] = score
-                        elif idx_key == 'NDX':
-                            scores_trend_ndx['indicator2'] = score
-                        else:
-                            scores_trend_hsi['indicator2'] = score
+                        score_dict['indicator2'] = score
                         
                         stage_emoji = "🟢" if score == 1.0 else ("🟡" if score == 0.5 else "🔴")
                         
-                        col1, col2 = st.columns([2, 1])
-                        with col1:
-                            st.metric(f"{idx_name} Stage", f"{stage} {stage_emoji}")
-                        with col2:
-                            st.metric("Score", f"{score}/1")
-                        
-                        with st.expander(f"📊 {idx_name} MA Details"):
-                            detail_col1, detail_col2 = st.columns(2)
-                            with detail_col1:
+                        with col_stage:
+                            with st.popover(f"{idx_name}: {stage}"):
                                 st.write(f"**Price:** {current_price:.2f}")
                                 st.write(f"**50 MA:** {ma_50:.2f}")
-                            with detail_col2:
                                 st.write(f"**150 MA:** {ma_150:.2f}")
                                 st.write(f"**200 MA:** {ma_200:.2f}")
+                        
+                        with col_score:
+                            st.metric("Score", f"{score}/1", delta=stage_emoji)
                     
                 except Exception as e:
-                    st.error(f"Error calculating {idx_name}: {str(e)}")
-                    if idx_key == 'SPX':
-                        scores_trend_spx['indicator2'] = 0
-                    elif idx_key == 'NDX':
-                        scores_trend_ndx['indicator2'] = 0
-                    else:
-                        scores_trend_hsi['indicator2'] = 0
+                    score_dict['indicator2'] = 0
+                    with col_stage:
+                        st.metric(idx_name, "Error")
+                    with col_score:
+                        st.metric("Score", "0/1")
             else:
-                st.warning(f"Insufficient data for {idx_name} (need 200+ days, got {len(data) if data is not None else 0})")
-                if idx_key == 'SPX':
-                    scores_trend_spx['indicator2'] = 0
-                elif idx_key == 'NDX':
-                    scores_trend_ndx['indicator2'] = 0
-                else:
-                    scores_trend_hsi['indicator2'] = 0
+                score_dict['indicator2'] = 0
+                with col_stage:
+                    st.metric(idx_name, "No Data")
+                with col_score:
+                    st.metric("Score", "0/1")
         else:
-            st.error(f"Unable to fetch data for {idx_name}")
-            if idx_key == 'SPX':
-                scores_trend_spx['indicator2'] = 0
-            elif idx_key == 'NDX':
-                scores_trend_ndx['indicator2'] = 0
-            else:
-                scores_trend_hsi['indicator2'] = 0
+            score_dict['indicator2'] = 0
+            with col_stage:
+                st.metric(idx_name, "Error")
+            with col_score:
+                st.metric("Score", "0/1")
     
     st.markdown("---")
     
     # === INDICATOR 3: Market Pulse ===
-    st.markdown("##### 3️⃣ Market Pulse")
+    st.markdown("#### 3️⃣ Market Pulse")
     
     with st.expander("ℹ️ Market Pulse Stages", expanded=False):
         st.markdown("""
-        - **Green (Acceleration)**: Price > 10VMA; VWMA8 > VWMA21 > VWMA34
-        - **Grey Strong (Accumulation)**: Price > 10VMA; VWMAs not stacked
-        - **Grey Weak (Distribution)**: Price < 10VMA; VWMAs not stacked
-        - **Red (Deceleration)**: Price < 10VMA; VWMA8 < VWMA21 < VWMA34
+        **Green** (1.0): Price > 10VMA; VWMA8 > VWMA21 > VWMA34 | **Grey Strong** (0.5): Price > 10VMA; VWMAs not stacked | **Grey Weak/Red** (0): Distribution or Deceleration
         """)
     
-    # US Markets
-    st.markdown("**US Markets (SPX & NDX)**")
-    market_pulse_us = st.selectbox(
-        "Select Market Pulse Stage:",
-        ["Green - Acceleration", "Grey Strong - Accumulation", "Grey Weak - Distribution", "Red - Deceleration"],
-        index=["Green - Acceleration", "Grey Strong - Accumulation", "Grey Weak - Distribution", "Red - Deceleration"].index(st.session_state.market_pulse_us),
-        help="Check TradingView Market Pulse indicator for US markets",
-        key="pulse_select_us"
-    )
+    # Row 1: SPX & NDX
+    col1, col2, col3, col4 = st.columns([2, 1, 2, 1])
+    with col1:
+        market_pulse_us = st.selectbox(
+            "SPX & NDX",
+            ["Green - Acceleration", "Grey Strong - Accumulation", "Grey Weak - Distribution", "Red - Deceleration"],
+            index=["Green - Acceleration", "Grey Strong - Accumulation", "Grey Weak - Distribution", "Red - Deceleration"].index(st.session_state.market_pulse_us),
+            key="pulse_select_us"
+        )
+        
+        if market_pulse_us != st.session_state.market_pulse_us:
+            st.session_state.market_pulse_us = market_pulse_us
+            saved_inputs['market_pulse_us'] = market_pulse_us
+            save_user_inputs(saved_inputs)
     
-    if market_pulse_us != st.session_state.market_pulse_us:
-        st.session_state.market_pulse_us = market_pulse_us
-        saved_inputs['market_pulse_us'] = market_pulse_us
-        save_user_inputs(saved_inputs)
-    
-    if market_pulse_us == "Green - Acceleration":
-        indicator3_us = 1.0
-        pulse_emoji_us = "🟢"
-    elif market_pulse_us == "Grey Strong - Accumulation":
-        indicator3_us = 0.5
-        pulse_emoji_us = "🟡"
-    else:
-        indicator3_us = 0.0
-        pulse_emoji_us = "🔴"
+    with col2:
+        if market_pulse_us == "Green - Acceleration":
+            indicator3_us = 1.0
+            st.metric("Score", f"{indicator3_us}/1", delta="🟢")
+        elif market_pulse_us == "Grey Strong - Accumulation":
+            indicator3_us = 0.5
+            st.metric("Score", f"{indicator3_us}/1", delta="🟡")
+        else:
+            indicator3_us = 0.0
+            st.metric("Score", f"{indicator3_us}/1", delta="🔴")
     
     scores_trend_spx['indicator3'] = indicator3_us
     scores_trend_ndx['indicator3'] = indicator3_us
     
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        st.metric("Market Pulse", f"{market_pulse_us.split(' - ')[1]} {pulse_emoji_us}")
-    with col2:
-        st.metric("Score", f"{indicator3_us}/1")
+    # Row 2: HSI
+    with col3:
+        market_pulse_hsi = st.selectbox(
+            "HSI",
+            ["Green - Acceleration", "Grey Strong - Accumulation", "Grey Weak - Distribution", "Red - Deceleration"],
+            index=["Green - Acceleration", "Grey Strong - Accumulation", "Grey Weak - Distribution", "Red - Deceleration"].index(st.session_state.market_pulse_hsi),
+            key="pulse_select_hsi"
+        )
+        
+        if market_pulse_hsi != st.session_state.market_pulse_hsi:
+            st.session_state.market_pulse_hsi = market_pulse_hsi
+            saved_inputs['market_pulse_hsi'] = market_pulse_hsi
+            save_user_inputs(saved_inputs)
     
-    # HSI Market
-    st.markdown("**HK Market (HSI)**")
-    market_pulse_hsi = st.selectbox(
-        "Select Market Pulse Stage:",
-        ["Green - Acceleration", "Grey Strong - Accumulation", "Grey Weak - Distribution", "Red - Deceleration"],
-        index=["Green - Acceleration", "Grey Strong - Accumulation", "Grey Weak - Distribution", "Red - Deceleration"].index(st.session_state.market_pulse_hsi),
-        help="Check TradingView Market Pulse indicator for HSI",
-        key="pulse_select_hsi"
-    )
-    
-    if market_pulse_hsi != st.session_state.market_pulse_hsi:
-        st.session_state.market_pulse_hsi = market_pulse_hsi
-        saved_inputs['market_pulse_hsi'] = market_pulse_hsi
-        save_user_inputs(saved_inputs)
-    
-    if market_pulse_hsi == "Green - Acceleration":
-        indicator3_hsi = 1.0
-        pulse_emoji_hsi = "🟢"
-    elif market_pulse_hsi == "Grey Strong - Accumulation":
-        indicator3_hsi = 0.5
-        pulse_emoji_hsi = "🟡"
-    else:
-        indicator3_hsi = 0.0
-        pulse_emoji_hsi = "🔴"
+    with col4:
+        if market_pulse_hsi == "Green - Acceleration":
+            indicator3_hsi = 1.0
+            st.metric("Score", f"{indicator3_hsi}/1", delta="🟢")
+        elif market_pulse_hsi == "Grey Strong - Accumulation":
+            indicator3_hsi = 0.5
+            st.metric("Score", f"{indicator3_hsi}/1", delta="🟡")
+        else:
+            indicator3_hsi = 0.0
+            st.metric("Score", f"{indicator3_hsi}/1", delta="🔴")
     
     scores_trend_hsi['indicator3'] = indicator3_hsi
-    
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        st.metric("Market Pulse", f"{market_pulse_hsi.split(' - ')[1]} {pulse_emoji_hsi}")
-    with col2:
-        st.metric("Score", f"{indicator3_hsi}/1")
     
     st.markdown("---")
     
