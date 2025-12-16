@@ -213,26 +213,41 @@ def fetch_liquidity_data():
 
 @st.cache_data(ttl=3600)
 def fetch_sentiment_data():
-    """Fetch sentiment indicators data"""
+    """Fetch sentiment indicators data for both US and HK markets"""
     try:
         end_date = datetime.now()
         start_date = end_date - timedelta(days=400)
         
+        # US tickers
         xly_df = yf.download('XLY', start=start_date, end=end_date, progress=False)
         xlp_df = yf.download('XLP', start=start_date, end=end_date, progress=False)
         ffty_df = yf.download('FFTY', start=start_date, end=end_date, progress=False)
         
+        # HK tickers
+        hk_consumer_disc_df = yf.download('3109.HK', start=start_date, end=end_date, progress=False)  # Consumer Discretionary
+        hk_consumer_staples_df = yf.download('3437.HK', start=start_date, end=end_date, progress=False)  # Consumer Staples
+        hk_innovation_df = yf.download('3067.HK', start=start_date, end=end_date, progress=False)  # Innovation (replaces FFTY)
+        
+        # US data
         xly = xly_df['Close'].squeeze() if isinstance(xly_df['Close'], pd.DataFrame) else xly_df['Close']
         xlp = xlp_df['Close'].squeeze() if isinstance(xlp_df['Close'], pd.DataFrame) else xlp_df['Close']
         ffty = ffty_df['Close'].squeeze() if isinstance(ffty_df['Close'], pd.DataFrame) else ffty_df['Close']
         
+        # HK data
+        hk_consumer_disc = hk_consumer_disc_df['Close'].squeeze() if isinstance(hk_consumer_disc_df['Close'], pd.DataFrame) else hk_consumer_disc_df['Close']
+        hk_consumer_staples = hk_consumer_staples_df['Close'].squeeze() if isinstance(hk_consumer_staples_df['Close'], pd.DataFrame) else hk_consumer_staples_df['Close']
+        hk_innovation = hk_innovation_df['Close'].squeeze() if isinstance(hk_innovation_df['Close'], pd.DataFrame) else hk_innovation_df['Close']
+        
         xly = xly.dropna()
         xlp = xlp.dropna()
         ffty = ffty.dropna()
+        hk_consumer_disc = hk_consumer_disc.dropna()
+        hk_consumer_staples = hk_consumer_staples.dropna()
+        hk_innovation = hk_innovation.dropna()
         
-        return xly, xlp, ffty
+        return xly, xlp, ffty, hk_consumer_disc, hk_consumer_staples, hk_innovation
     except Exception as e:
-        return None, None, None
+        return None, None, None, None, None, None
 
 @st.cache_data(ttl=3600)
 def fetch_trend_data():
@@ -302,29 +317,33 @@ def calculate_stage(price, ma50, ma150, ma200):
 st.title("📊 Market Checklist")
 
 # Initialize session state for manual inputs and scores
+# Shared manual inputs (US markets - SPX & NDX)
 if 'citi_value' not in st.session_state:
     st.session_state.citi_value = saved_inputs.get('citi_value', 0.0)
 if 'citi_prev' not in st.session_state:
     st.session_state.citi_prev = saved_inputs.get('citi_prev', 0.0)
 if 'r3fi_manual' not in st.session_state:
     st.session_state.r3fi_manual = saved_inputs.get('r3fi_manual', 50.0)
-if 'uptrend_status' not in st.session_state:
-    st.session_state.uptrend_status = saved_inputs.get('uptrend_status', "Under Pressure/Correction")
-if 'selected_index' not in st.session_state:
-    st.session_state.selected_index = saved_inputs.get('selected_index', 'NDX (Nasdaq 100)')
-if 'manual_stage' not in st.session_state:
-    st.session_state.manual_stage = saved_inputs.get('manual_stage', "Other")
-if 'market_pulse' not in st.session_state:
-    st.session_state.market_pulse = saved_inputs.get('market_pulse', "Red - Deceleration")
+if 'uptrend_status_us' not in st.session_state:
+    st.session_state.uptrend_status_us = saved_inputs.get('uptrend_status_us', "Under Pressure/Correction")
+if 'market_pulse_us' not in st.session_state:
+    st.session_state.market_pulse_us = saved_inputs.get('market_pulse_us', "Red - Deceleration")
+
+# HSI-specific manual inputs
+if 'uptrend_status_hsi' not in st.session_state:
+    st.session_state.uptrend_status_hsi = saved_inputs.get('uptrend_status_hsi', "Under Pressure/Correction")
+if 'market_pulse_hsi' not in st.session_state:
+    st.session_state.market_pulse_hsi = saved_inputs.get('market_pulse_hsi', "Red - Deceleration")
+
+# Score tracking for all 3 indices
 if 'total_score_liq' not in st.session_state:
     st.session_state.total_score_liq = 0
-if 'total_score_sent' not in st.session_state:
-    st.session_state.total_score_sent = 0
-if 'total_score_trend' not in st.session_state:
-    st.session_state.total_score_trend = 0
-
-# ==================== OVERALL SUMMARY (TOP) ====================
-st.header("🎯 Overall Market Checklist")
+if 'total_score_spx' not in st.session_state:
+    st.session_state.total_score_spx = 0
+if 'total_score_ndx' not in st.session_state:
+    st.session_state.total_score_ndx = 0
+if 'total_score_hsi' not in st.session_state:
+    st.session_state.total_score_hsi = 0
 
 # Function to calculate positioning percentage based on score
 def calculate_position_percentage(score):
@@ -377,19 +396,47 @@ def calculate_position_percentage(score):
     
     return 0
 
-col1, col2, col3, col4, col5 = st.columns(5)
+# ==================== OVERALL SUMMARY (TOP) ====================
+st.header("🎯 Overall Market Checklist")
+
+# Display all 3 indices side by side
+col1, col2, col3 = st.columns(3)
+
 with col1:
-    st.metric("💧 Liquidity", f"{st.session_state.total_score_liq}/3", help="Click Liquidity tab for details")
+    st.subheader("📈 SPX (S&P 500)")
+    spx_liquidity = st.session_state.total_score_liq
+    spx_total = st.session_state.total_score_spx
+    position_pct_spx = calculate_position_percentage(spx_total)
+    
+    subcol1, subcol2 = st.columns(2)
+    with subcol1:
+        st.metric("Total Score", f"{spx_total:.1f}/10")
+    with subcol2:
+        st.metric("Position %", f"{position_pct_spx}%")
+
 with col2:
-    st.metric("🎭 Sentiment", f"{st.session_state.total_score_sent:.1f}/4", help="Click Sentiment tab for details")
+    st.subheader("📊 NDX (Nasdaq 100)")
+    ndx_liquidity = st.session_state.total_score_liq
+    ndx_total = st.session_state.total_score_ndx
+    position_pct_ndx = calculate_position_percentage(ndx_total)
+    
+    subcol1, subcol2 = st.columns(2)
+    with subcol1:
+        st.metric("Total Score", f"{ndx_total:.1f}/10")
+    with subcol2:
+        st.metric("Position %", f"{position_pct_ndx}%")
+
 with col3:
-    st.metric("📊 Trend", f"{st.session_state.total_score_trend:.1f}/3", help="Click Trend tab for details")
-with col4:
-    overall_total = st.session_state.total_score_liq + st.session_state.total_score_sent + st.session_state.total_score_trend
-    st.metric("🎯 OVERALL", f"{overall_total:.1f}/10", help="Total score across all categories")
-with col5:
-    position_pct = calculate_position_percentage(overall_total)
-    st.metric("📍 Position %", f"{position_pct}%", help="Recommended portfolio positioning based on score")
+    st.subheader("🌏 HSI (Hang Seng)")
+    hsi_liquidity = st.session_state.total_score_liq
+    hsi_total = st.session_state.total_score_hsi
+    position_pct_hsi = calculate_position_percentage(hsi_total)
+    
+    subcol1, subcol2 = st.columns(2)
+    with subcol1:
+        st.metric("Total Score", f"{hsi_total:.1f}/10")
+    with subcol2:
+        st.metric("Position %", f"{position_pct_hsi}%")
 
 st.caption("💡 Enter data in each tab below to calculate scores")
 
