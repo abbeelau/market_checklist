@@ -299,130 +299,6 @@ def calculate_stage(price, ma50, ma150, ma200):
     except:
         return "Error", 0.0
 
-# ==================== AUTO-CALCULATION ON LOAD ====================
-def calculate_all_scores():
-    """Calculate all scores based on current data and session state"""
-    
-    # Initialize scores dictionary
-    scores = {
-        'liquidity': 0,
-        'sentiment': 0,
-        'trend': 0
-    }
-    
-    # LIQUIDITY CALCULATIONS
-    try:
-        bnd_data, irx_data, tip_data, ibit_data = fetch_liquidity_data()
-        if bnd_data is not None and irx_data is not None:
-            latest_month_end = get_latest_month_end()
-            
-            # Indicator 1: BND vs IRX
-            bnd_3m = calc_monthly_return(bnd_data, 3, latest_month_end)
-            bnd_6m = calc_monthly_return(bnd_data, 6, latest_month_end)
-            bnd_11m = calc_monthly_return(bnd_data, 11, latest_month_end)
-            irx_3m = calc_irx_compounded_return(irx_data, 3, latest_month_end)
-            irx_6m = calc_irx_compounded_return(irx_data, 6, latest_month_end)
-            irx_11m = calc_irx_compounded_return(irx_data, 11, latest_month_end)
-            
-            if all(v is not None for v in [bnd_3m, bnd_6m, bnd_11m, irx_3m, irx_6m, irx_11m]):
-                bnd_weighted = (bnd_3m * 0.33 + bnd_6m * 0.33 + bnd_11m * 0.34)
-                irx_weighted = (irx_3m * 0.33 + irx_6m * 0.33 + irx_11m * 0.34)
-                scores['liquidity'] += 1 if bnd_weighted > irx_weighted else 0
-            
-            # Indicator 2: TIP
-            tip_5ma = calc_ma(tip_data, 5)
-            tip_20ma = calc_ma(tip_data, 20)
-            if tip_5ma is not None and tip_20ma is not None:
-                scores['liquidity'] += 1 if float(tip_5ma) > float(tip_20ma) else 0
-            
-            # Indicator 3: IBIT
-            ibit_3ma = calc_ma(ibit_data, 3)
-            ibit_8ma = calc_ma(ibit_data, 8)
-            if ibit_3ma is not None and ibit_8ma is not None:
-                scores['liquidity'] += 1 if float(ibit_3ma) > float(ibit_8ma) else 0
-    except:
-        pass
-    
-    # SENTIMENT CALCULATIONS
-    try:
-        # Indicator 1: Citi Index
-        citi_value = st.session_state.citi_value
-        citi_prev = st.session_state.citi_prev
-        score_above_zero = 0.5 if citi_value > 0 else 0
-        citi_mom = ((citi_value - citi_prev) / abs(citi_prev)) * 100 if citi_prev != 0 else 0
-        score_mom_positive = 0.5 if citi_mom > 0 else 0
-        scores['sentiment'] += score_above_zero + score_mom_positive
-        
-        # Indicator 2: R3000
-        r3fi_manual = st.session_state.r3fi_manual
-        scores['sentiment'] += 1 if r3fi_manual > 50 else 0
-        
-        # Indicator 3 & 4: XLY/XLP and FFTY
-        xly_data, xlp_data, ffty_data = fetch_sentiment_data()
-        if xly_data is not None and xlp_data is not None:
-            xly_xlp_ratio = xly_data / xlp_data
-            ratio_3ma = calc_ma(xly_xlp_ratio, 3)
-            ratio_8ma = calc_ma(xly_xlp_ratio, 8)
-            if ratio_3ma is not None and ratio_8ma is not None:
-                scores['sentiment'] += 1 if float(ratio_3ma) > float(ratio_8ma) else 0
-        
-        if ffty_data is not None:
-            ffty_3ma = calc_ma(ffty_data, 3)
-            ffty_8ma = calc_ma(ffty_data, 8)
-            if ffty_3ma is not None and ffty_8ma is not None:
-                scores['sentiment'] += 1 if float(ffty_3ma) > float(ffty_8ma) else 0
-    except:
-        pass
-    
-    # TREND CALCULATIONS
-    try:
-        # Indicator 1: Uptrend Confirmation
-        uptrend_status = st.session_state.uptrend_status
-        if uptrend_status == "Confirmed Uptrend":
-            scores['trend'] += 1.0
-        elif uptrend_status == "Ambiguous Follow-through":
-            scores['trend'] += 0.5
-        
-        # Indicator 2: Stage 2
-        selected_index = st.session_state.selected_index
-        if "Manual" in selected_index:
-            manual_stage = st.session_state.manual_stage
-            if manual_stage == "S2":
-                scores['trend'] += 1.0
-            elif manual_stage in ["S1", "S3 Strong"]:
-                scores['trend'] += 0.5
-        else:
-            # Auto-calculate for other indices
-            index_data = fetch_trend_data()
-            if index_data and selected_index in index_data:
-                data = index_data[selected_index]
-                if data is not None and len(data) >= 200:
-                    current_price = float(data.iloc[-1])
-                    ma_50 = calc_ma(data, 50)
-                    ma_150 = calc_ma(data, 150)
-                    ma_200 = calc_ma(data, 200)
-                    if all(v is not None for v in [ma_50, ma_150, ma_200]):
-                        _, score = calculate_stage(current_price, ma_50, ma_150, ma_200)
-                        scores['trend'] += score
-        
-        # Indicator 3: Market Pulse
-        market_pulse = st.session_state.market_pulse
-        if market_pulse == "Green - Acceleration":
-            scores['trend'] += 1.0
-        elif market_pulse == "Grey Strong - Accumulation":
-            scores['trend'] += 0.5
-    except:
-        pass
-    
-    return scores
-
-# Run auto-calculation on page load if we have saved inputs
-if saved_inputs:
-    calculated_scores = calculate_all_scores()
-    st.session_state.total_score_liq = calculated_scores['liquidity']
-    st.session_state.total_score_sent = calculated_scores['sentiment']
-    st.session_state.total_score_trend = calculated_scores['trend']
-
 st.title("📊 Market Checklist")
 
 # Initialize session state for manual inputs and scores
@@ -449,6 +325,11 @@ if 'total_score_trend' not in st.session_state:
 
 # ==================== OVERALL SUMMARY (TOP) ====================
 st.header("🎯 Overall Market Checklist")
+
+# Calculate button at the top
+if st.button("🔄 Calculate All Scores", use_container_width=True, type="primary"):
+    st.cache_data.clear()
+    st.rerun()
 
 # Function to calculate positioning percentage based on score
 def calculate_position_percentage(score):
@@ -1014,18 +895,12 @@ with tab3:
     total_score_trend = st.session_state.total_score_trend
     max_score_trend = 3.0
 
-# ==================== REFRESH BUTTON ====================
+# ==================== FOOTER ====================
 st.markdown("---")
-col1, col2 = st.columns(2)
-with col1:
-    if st.button("🔄 Refresh All Data", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
-with col2:
-    if st.button("🗑️ Clear Saved Inputs", use_container_width=True):
-        if os.path.exists(USER_INPUTS_FILE):
-            os.remove(USER_INPUTS_FILE)
-            st.success("Saved inputs cleared! Refresh the page to reset.")
+if st.button("🗑️ Clear Saved Inputs", use_container_width=True):
+    if os.path.exists(USER_INPUTS_FILE):
+        os.remove(USER_INPUTS_FILE)
+        st.success("✅ Saved inputs cleared! Refresh the page to reset.")
 
 st.caption("⚠️ This is for educational purposes only. Not financial advice.")
 st.caption("💾 Your manual inputs are automatically saved and will be restored on your next visit.")
