@@ -3,9 +3,36 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 import calendar
+import json
+import os
 
 # Set page configuration
 st.set_page_config(page_title="Market Checklist", layout="wide")
+
+# ==================== PERSISTENT STORAGE FUNCTIONS ====================
+USER_INPUTS_FILE = "user_inputs.json"
+
+def load_user_inputs():
+    """Load previously saved user inputs from JSON file"""
+    if os.path.exists(USER_INPUTS_FILE):
+        try:
+            with open(USER_INPUTS_FILE, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            st.error(f"Error loading saved inputs: {str(e)}")
+            return {}
+    return {}
+
+def save_user_inputs(inputs):
+    """Save user inputs to JSON file"""
+    try:
+        with open(USER_INPUTS_FILE, 'w') as f:
+            json.dump(inputs, f, indent=2)
+    except Exception as e:
+        st.error(f"Error saving inputs: {str(e)}")
+
+# Load saved inputs at startup
+saved_inputs = load_user_inputs()
 
 # Custom CSS for compact layout
 st.markdown("""
@@ -36,10 +63,20 @@ st.markdown("""
 st.title("📊 Market Checklist")
 
 # Initialize session state for manual inputs and scores
-if 'citi_score' not in st.session_state:
-    st.session_state.citi_score = 0.0
+if 'citi_value' not in st.session_state:
+    st.session_state.citi_value = saved_inputs.get('citi_value', 0.0)
+if 'citi_prev' not in st.session_state:
+    st.session_state.citi_prev = saved_inputs.get('citi_prev', 0.0)
 if 'r3fi_manual' not in st.session_state:
-    st.session_state.r3fi_manual = 50.0
+    st.session_state.r3fi_manual = saved_inputs.get('r3fi_manual', 50.0)
+if 'uptrend_status' not in st.session_state:
+    st.session_state.uptrend_status = saved_inputs.get('uptrend_status', "Under Pressure/Correction")
+if 'selected_index' not in st.session_state:
+    st.session_state.selected_index = saved_inputs.get('selected_index', 'NDX (Nasdaq 100)')
+if 'manual_stage' not in st.session_state:
+    st.session_state.manual_stage = saved_inputs.get('manual_stage', "Other")
+if 'market_pulse' not in st.session_state:
+    st.session_state.market_pulse = saved_inputs.get('market_pulse', "Red - Deceleration")
 if 'total_score_liq' not in st.session_state:
     st.session_state.total_score_liq = 0
 if 'total_score_sent' not in st.session_state:
@@ -509,19 +546,28 @@ with tab2:
     with col1:
         citi_value = st.number_input(
             "Current Value",
-            value=0.0,
+            value=st.session_state.citi_value,
             step=0.1,
             format="%.2f",
             key="citi_current"
         )
+        if citi_value != st.session_state.citi_value:
+            st.session_state.citi_value = citi_value
+            saved_inputs['citi_value'] = citi_value
+            save_user_inputs(saved_inputs)
+    
     with col2:
         citi_prev = st.number_input(
             "Previous Month",
-            value=0.0,
+            value=st.session_state.citi_prev,
             step=0.1,
             format="%.2f",
-            key="citi_prev"
+            key="citi_prev_input"
         )
+        if citi_prev != st.session_state.citi_prev:
+            st.session_state.citi_prev = citi_prev
+            saved_inputs['citi_prev'] = citi_prev
+            save_user_inputs(saved_inputs)
     
     # Calculate score
     score_above_zero = 0.5 if citi_value > 0 else 0
@@ -547,7 +593,18 @@ with tab2:
     
     col1, col2 = st.columns(2)
     with col1:
-        r3fi_manual = st.number_input("% Above 50-Day MA", value=50.0, step=0.1, min_value=0.0, max_value=100.0, key="r3fi_input")
+        r3fi_manual = st.number_input(
+            "% Above 50-Day MA", 
+            value=st.session_state.r3fi_manual, 
+            step=0.1, 
+            min_value=0.0, 
+            max_value=100.0, 
+            key="r3fi_input"
+        )
+        if r3fi_manual != st.session_state.r3fi_manual:
+            st.session_state.r3fi_manual = r3fi_manual
+            saved_inputs['r3fi_manual'] = r3fi_manual
+            save_user_inputs(saved_inputs)
     
     indicator2_sent = 1 if r3fi_manual > 50 else 0
     scores_sent['indicator2'] = indicator2_sent
@@ -641,8 +698,15 @@ with tab3:
     uptrend_status = st.selectbox(
         "Select Market Status:",
         ["Confirmed Uptrend", "Under Pressure/Correction", "Ambiguous Follow-through"],
-        help="Your assessment of the current market trend"
+        index=["Confirmed Uptrend", "Under Pressure/Correction", "Ambiguous Follow-through"].index(st.session_state.uptrend_status),
+        help="Your assessment of the current market trend",
+        key="uptrend_select"
     )
+    
+    if uptrend_status != st.session_state.uptrend_status:
+        st.session_state.uptrend_status = uptrend_status
+        saved_inputs['uptrend_status'] = uptrend_status
+        save_user_inputs(saved_inputs)
     
     if uptrend_status == "Confirmed Uptrend":
         indicator1_trend = 1.0
@@ -671,8 +735,15 @@ with tab3:
     selected_index = st.selectbox(
         "Select Index to Analyze:",
         ['NDX (Nasdaq 100)', 'SPX (S&P 500)', 'HSI (Hang Seng)', 'HSTECH (Hang Seng TECH) - Manual'],
-        help="Choose which index to use for Stage 2 calculation"
+        index=['NDX (Nasdaq 100)', 'SPX (S&P 500)', 'HSI (Hang Seng)', 'HSTECH (Hang Seng TECH) - Manual'].index(st.session_state.selected_index),
+        help="Choose which index to use for Stage 2 calculation",
+        key="index_select"
     )
+    
+    if selected_index != st.session_state.selected_index:
+        st.session_state.selected_index = selected_index
+        saved_inputs['selected_index'] = selected_index
+        save_user_inputs(saved_inputs)
     
     with st.expander("ℹ️ Stage Definitions", expanded=False):
         st.markdown("""
@@ -689,8 +760,15 @@ with tab3:
         manual_stage = st.selectbox(
             "Select HSTECH Stage:",
             ["S2", "S1", "S3 Strong", "Other"],
-            help="Check TradingView or other sources for HSTECH stage"
+            index=["S2", "S1", "S3 Strong", "Other"].index(st.session_state.manual_stage),
+            help="Check TradingView or other sources for HSTECH stage",
+            key="hstech_stage_select"
         )
+        
+        if manual_stage != st.session_state.manual_stage:
+            st.session_state.manual_stage = manual_stage
+            saved_inputs['manual_stage'] = manual_stage
+            save_user_inputs(saved_inputs)
         
         if manual_stage == "S2":
             indicator2_trend = 1.0
@@ -779,8 +857,15 @@ with tab3:
     market_pulse = st.selectbox(
         "Select Market Pulse Stage:",
         ["Green - Acceleration", "Grey Strong - Accumulation", "Grey Weak - Distribution", "Red - Deceleration"],
-        help="Check TradingView Market Pulse indicator"
+        index=["Green - Acceleration", "Grey Strong - Accumulation", "Grey Weak - Distribution", "Red - Deceleration"].index(st.session_state.market_pulse),
+        help="Check TradingView Market Pulse indicator",
+        key="pulse_select"
     )
+    
+    if market_pulse != st.session_state.market_pulse:
+        st.session_state.market_pulse = market_pulse
+        saved_inputs['market_pulse'] = market_pulse
+        save_user_inputs(saved_inputs)
     
     if market_pulse == "Green - Acceleration":
         indicator3_trend = 1.0
@@ -809,8 +894,16 @@ with tab3:
 
 # ==================== REFRESH BUTTON ====================
 st.markdown("---")
-if st.button("🔄 Refresh All Data", use_container_width=True):
-    st.cache_data.clear()
-    st.rerun()
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("🔄 Refresh All Data", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+with col2:
+    if st.button("🗑️ Clear Saved Inputs", use_container_width=True):
+        if os.path.exists(USER_INPUTS_FILE):
+            os.remove(USER_INPUTS_FILE)
+            st.success("Saved inputs cleared! Refresh the page to reset.")
 
 st.caption("⚠️ This is for educational purposes only. Not financial advice.")
+st.caption("💾 Your manual inputs are automatically saved and will be restored on your next visit.")
