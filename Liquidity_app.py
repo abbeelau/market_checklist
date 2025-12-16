@@ -326,11 +326,6 @@ if 'total_score_trend' not in st.session_state:
 # ==================== OVERALL SUMMARY (TOP) ====================
 st.header("🎯 Overall Market Checklist")
 
-# Calculate button at the top
-if st.button("🔄 Calculate All Scores", use_container_width=True, type="primary"):
-    st.cache_data.clear()
-    st.rerun()
-
 # Function to calculate positioning percentage based on score
 def calculate_position_percentage(score):
     """
@@ -398,14 +393,17 @@ with col5:
 
 st.caption("💡 Enter data in each tab below to calculate scores")
 
-# Add positioning reference table in an expander
-with st.expander("📊 Score → Position % Reference Table"):
-    reference_df = pd.DataFrame({
-        'Score': ['10', '9', '8', '7', '6', '5', '< 5'],
-        'Position %': ['90%', '100%', '80%', '60%', '50%', '40%', 'Proportional (0-40%)']
-    })
-    st.table(reference_df)
-    st.caption("💡 Scores between mapped values are interpolated linearly")
+# Action buttons
+col_btn1, col_btn2 = st.columns(2)
+with col_btn1:
+    if st.button("🔄 Calculate All Scores", type="primary"):
+        st.cache_data.clear()
+        st.rerun()
+with col_btn2:
+    if st.button("🗑️ Clear Saved Inputs"):
+        if os.path.exists(USER_INPUTS_FILE):
+            os.remove(USER_INPUTS_FILE)
+            st.success("✅ Cleared! Refresh page to reset.")
 
 st.divider()
 
@@ -897,10 +895,15 @@ with tab3:
 
 # ==================== FOOTER ====================
 st.markdown("---")
-if st.button("🗑️ Clear Saved Inputs", use_container_width=True):
-    if os.path.exists(USER_INPUTS_FILE):
-        os.remove(USER_INPUTS_FILE)
-        st.success("✅ Saved inputs cleared! Refresh the page to reset.")
+
+# Add positioning reference table in an expander
+with st.expander("📊 Score → Position % Reference Table"):
+    reference_df = pd.DataFrame({
+        'Score': ['10', '9', '8', '7', '6', '5', '< 5'],
+        'Position %': ['90%', '100%', '80%', '60%', '50%', '40%', 'Proportional (0-40%)']
+    })
+    st.table(reference_df)
+    st.caption("💡 Scores between mapped values are interpolated linearly")
 
 st.caption("⚠️ This is for educational purposes only. Not financial advice.")
 st.caption("💾 Your manual inputs are automatically saved and will be restored on your next visit.")
