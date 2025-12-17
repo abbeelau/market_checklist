@@ -402,8 +402,8 @@ with col3:
 
 st.caption("💡 Enter data in each tab below to calculate scores")
 
-# Action buttons
-col_btn1, col_btn2 = st.columns(2)
+# Action buttons and reference table in same row
+col_btn1, col_btn2, col_btn3 = st.columns(3)
 with col_btn1:
     if st.button("🔄 Calculate All Scores", type="primary"):
         st.cache_data.clear()
@@ -413,6 +413,13 @@ with col_btn2:
         if os.path.exists(USER_INPUTS_FILE):
             os.remove(USER_INPUTS_FILE)
             st.success("✅ Cleared! Refresh page to reset.")
+with col_btn3:
+    with st.expander("📊 Position % Reference"):
+        reference_df = pd.DataFrame({
+            'Score': ['10', '9', '8', '7', '6', '5', '< 5'],
+            'Position %': ['90%', '100%', '80%', '60%', '50%', '40%', '0-40%']
+        })
+        st.table(reference_df)
 
 st.divider()
 
@@ -1047,15 +1054,6 @@ with tab3:
 
 # ==================== FOOTER ====================
 st.markdown("---")
-
-# Add positioning reference table in an expander
-with st.expander("📊 Score → Position % Reference Table"):
-    reference_df = pd.DataFrame({
-        'Score': ['10', '9', '8', '7', '6', '5', '< 5'],
-        'Position %': ['90%', '100%', '80%', '60%', '50%', '40%', 'Proportional (0-40%)']
-    })
-    st.table(reference_df)
-    st.caption("💡 Scores between mapped values are interpolated linearly")
 
 st.caption("⚠️ This is for educational purposes only. Not financial advice.")
 st.caption("💾 Your manual inputs are automatically saved and will be restored on your next visit.")
