@@ -307,12 +307,19 @@ if 'citi_prev' not in st.session_state:
     st.session_state.citi_prev = saved_inputs.get('citi_prev', 0.0)
 if 'r3fi_manual' not in st.session_state:
     st.session_state.r3fi_manual = saved_inputs.get('r3fi_manual', 50.0)
-if 'uptrend_status_us' not in st.session_state:
-    st.session_state.uptrend_status_us = saved_inputs.get('uptrend_status_us', "Under Pressure/Correction")
-if 'market_pulse_us' not in st.session_state:
-    st.session_state.market_pulse_us = saved_inputs.get('market_pulse_us', "Red - Deceleration")
+
+# Separate manual inputs for SPX, NDX, and HSI
+if 'uptrend_status_spx' not in st.session_state:
+    st.session_state.uptrend_status_spx = saved_inputs.get('uptrend_status_spx', "Under Pressure/Correction")
+if 'uptrend_status_ndx' not in st.session_state:
+    st.session_state.uptrend_status_ndx = saved_inputs.get('uptrend_status_ndx', "Under Pressure/Correction")
 if 'uptrend_status_hsi' not in st.session_state:
     st.session_state.uptrend_status_hsi = saved_inputs.get('uptrend_status_hsi', "Under Pressure/Correction")
+
+if 'market_pulse_spx' not in st.session_state:
+    st.session_state.market_pulse_spx = saved_inputs.get('market_pulse_spx', "Red - Deceleration")
+if 'market_pulse_ndx' not in st.session_state:
+    st.session_state.market_pulse_ndx = saved_inputs.get('market_pulse_ndx', "Red - Deceleration")
 if 'market_pulse_hsi' not in st.session_state:
     st.session_state.market_pulse_hsi = saved_inputs.get('market_pulse_hsi', "Red - Deceleration")
 
@@ -325,6 +332,20 @@ if 'total_score_ndx' not in st.session_state:
     st.session_state.total_score_ndx = 0
 if 'total_score_hsi' not in st.session_state:
     st.session_state.total_score_hsi = 0
+
+# Store individual component scores for breakdown display
+if 'score_sent_spx' not in st.session_state:
+    st.session_state.score_sent_spx = 0
+if 'score_sent_ndx' not in st.session_state:
+    st.session_state.score_sent_ndx = 0
+if 'score_sent_hsi' not in st.session_state:
+    st.session_state.score_sent_hsi = 0
+if 'score_trend_spx' not in st.session_state:
+    st.session_state.score_trend_spx = 0
+if 'score_trend_ndx' not in st.session_state:
+    st.session_state.score_trend_ndx = 0
+if 'score_trend_hsi' not in st.session_state:
+    st.session_state.score_trend_hsi = 0
 
 # ==================== OVERALL SUMMARY (TOP) ====================
 st.header("🎯 Overall Market Checklist")
@@ -341,6 +362,11 @@ with col1:
         st.metric("Total Score", f"{spx_total:.1f}/10")
     with subcol2:
         st.metric("Position %", f"{position_pct_spx}%")
+    
+    with st.expander("📊 Score Breakdown"):
+        st.write(f"💧 **Liquidity:** {st.session_state.total_score_liq}/3")
+        st.write(f"🎭 **Sentiment:** {st.session_state.score_sent_spx:.1f}/4")
+        st.write(f"📊 **Trend:** {st.session_state.score_trend_spx:.1f}/3")
 
 with col2:
     st.subheader("📊 NDX (Nasdaq 100)")
@@ -352,6 +378,11 @@ with col2:
         st.metric("Total Score", f"{ndx_total:.1f}/10")
     with subcol2:
         st.metric("Position %", f"{position_pct_ndx}%")
+    
+    with st.expander("📊 Score Breakdown"):
+        st.write(f"💧 **Liquidity:** {st.session_state.total_score_liq}/3")
+        st.write(f"🎭 **Sentiment:** {st.session_state.score_sent_ndx:.1f}/4")
+        st.write(f"📊 **Trend:** {st.session_state.score_trend_ndx:.1f}/3")
 
 with col3:
     st.subheader("🌏 HSI (Hang Seng)")
@@ -363,6 +394,11 @@ with col3:
         st.metric("Total Score", f"{hsi_total:.1f}/10")
     with subcol2:
         st.metric("Position %", f"{position_pct_hsi}%")
+    
+    with st.expander("📊 Score Breakdown"):
+        st.write(f"💧 **Liquidity:** {st.session_state.total_score_liq}/3")
+        st.write(f"🎭 **Sentiment:** {st.session_state.score_sent_hsi:.1f}/4")
+        st.write(f"📊 **Trend:** {st.session_state.score_trend_hsi:.1f}/3")
 
 st.caption("💡 Enter data in each tab below to calculate scores")
 
@@ -710,11 +746,18 @@ with tab2:
     total_sent_us = sum(scores_sent_us.values())
     total_sent_hsi = sum(scores_sent_hsi.values())
     
+    # Save to session state for breakdown display
+    st.session_state.score_sent_spx = total_sent_us
+    st.session_state.score_sent_ndx = total_sent_us
+    st.session_state.score_sent_hsi = total_sent_hsi
+    
     st.markdown("#### 🎭 Sentiment Scores by Index")
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("SPX & NDX", f"{total_sent_us:.1f}/4")
+        st.metric("SPX", f"{total_sent_us:.1f}/4")
     with col2:
+        st.metric("NDX", f"{total_sent_us:.1f}/4")
+    with col3:
         st.metric("HSI", f"{total_sent_hsi:.1f}/4")
 
 # ==================== TAB 3: TREND ====================
@@ -731,37 +774,64 @@ with tab3:
     # === INDICATOR 1: Uptrend Confirmation ===
     st.markdown("#### 1️⃣ Uptrend Confirmation")
     
-    # Row 1: SPX & NDX
-    col1, col2, col3, col4 = st.columns([2, 1, 2, 1])
+    col1, col2, col3, col4, col5, col6 = st.columns([2, 1, 2, 1, 2, 1])
+    
+    # SPX
     with col1:
-        uptrend_status_us = st.selectbox(
-            "SPX & NDX",
+        uptrend_status_spx = st.selectbox(
+            "SPX",
             ["Confirmed Uptrend", "Under Pressure/Correction", "Ambiguous Follow-through"],
-            index=["Confirmed Uptrend", "Under Pressure/Correction", "Ambiguous Follow-through"].index(st.session_state.uptrend_status_us),
-            key="uptrend_select_us"
+            index=["Confirmed Uptrend", "Under Pressure/Correction", "Ambiguous Follow-through"].index(st.session_state.uptrend_status_spx),
+            key="uptrend_select_spx"
         )
         
-        if uptrend_status_us != st.session_state.uptrend_status_us:
-            st.session_state.uptrend_status_us = uptrend_status_us
-            saved_inputs['uptrend_status_us'] = uptrend_status_us
+        if uptrend_status_spx != st.session_state.uptrend_status_spx:
+            st.session_state.uptrend_status_spx = uptrend_status_spx
+            saved_inputs['uptrend_status_spx'] = uptrend_status_spx
             save_user_inputs(saved_inputs)
     
     with col2:
-        if uptrend_status_us == "Confirmed Uptrend":
-            indicator1_us = 1.0
-            st.metric("Score", f"{indicator1_us}/1", delta="🟢")
-        elif uptrend_status_us == "Ambiguous Follow-through":
-            indicator1_us = 0.5
-            st.metric("Score", f"{indicator1_us}/1", delta="🟡")
+        if uptrend_status_spx == "Confirmed Uptrend":
+            indicator1_spx = 1.0
+            st.metric("Score", f"{indicator1_spx}/1", delta="🟢")
+        elif uptrend_status_spx == "Ambiguous Follow-through":
+            indicator1_spx = 0.5
+            st.metric("Score", f"{indicator1_spx}/1", delta="🟡")
         else:
-            indicator1_us = 0.0
-            st.metric("Score", f"{indicator1_us}/1", delta="🔴")
+            indicator1_spx = 0.0
+            st.metric("Score", f"{indicator1_spx}/1", delta="🔴")
     
-    scores_trend_spx['indicator1'] = indicator1_us
-    scores_trend_ndx['indicator1'] = indicator1_us
+    scores_trend_spx['indicator1'] = indicator1_spx
     
-    # Row 2: HSI
+    # NDX
     with col3:
+        uptrend_status_ndx = st.selectbox(
+            "NDX",
+            ["Confirmed Uptrend", "Under Pressure/Correction", "Ambiguous Follow-through"],
+            index=["Confirmed Uptrend", "Under Pressure/Correction", "Ambiguous Follow-through"].index(st.session_state.uptrend_status_ndx),
+            key="uptrend_select_ndx"
+        )
+        
+        if uptrend_status_ndx != st.session_state.uptrend_status_ndx:
+            st.session_state.uptrend_status_ndx = uptrend_status_ndx
+            saved_inputs['uptrend_status_ndx'] = uptrend_status_ndx
+            save_user_inputs(saved_inputs)
+    
+    with col4:
+        if uptrend_status_ndx == "Confirmed Uptrend":
+            indicator1_ndx = 1.0
+            st.metric("Score", f"{indicator1_ndx}/1", delta="🟢")
+        elif uptrend_status_ndx == "Ambiguous Follow-through":
+            indicator1_ndx = 0.5
+            st.metric("Score", f"{indicator1_ndx}/1", delta="🟡")
+        else:
+            indicator1_ndx = 0.0
+            st.metric("Score", f"{indicator1_ndx}/1", delta="🔴")
+    
+    scores_trend_ndx['indicator1'] = indicator1_ndx
+    
+    # HSI
+    with col5:
         uptrend_status_hsi = st.selectbox(
             "HSI",
             ["Confirmed Uptrend", "Under Pressure/Correction", "Ambiguous Follow-through"],
@@ -774,7 +844,7 @@ with tab3:
             saved_inputs['uptrend_status_hsi'] = uptrend_status_hsi
             save_user_inputs(saved_inputs)
     
-    with col4:
+    with col6:
         if uptrend_status_hsi == "Confirmed Uptrend":
             indicator1_hsi = 1.0
             st.metric("Score", f"{indicator1_hsi}/1", delta="🟢")
@@ -866,37 +936,64 @@ with tab3:
         **Green** (1.0): Price > 10VMA; VWMA8 > VWMA21 > VWMA34 | **Grey Strong** (0.5): Price > 10VMA; VWMAs not stacked | **Grey Weak/Red** (0): Distribution or Deceleration
         """)
     
-    # Row 1: SPX & NDX
-    col1, col2, col3, col4 = st.columns([2, 1, 2, 1])
+    col1, col2, col3, col4, col5, col6 = st.columns([2, 1, 2, 1, 2, 1])
+    
+    # SPX
     with col1:
-        market_pulse_us = st.selectbox(
-            "SPX & NDX",
+        market_pulse_spx = st.selectbox(
+            "SPX",
             ["Green - Acceleration", "Grey Strong - Accumulation", "Grey Weak - Distribution", "Red - Deceleration"],
-            index=["Green - Acceleration", "Grey Strong - Accumulation", "Grey Weak - Distribution", "Red - Deceleration"].index(st.session_state.market_pulse_us),
-            key="pulse_select_us"
+            index=["Green - Acceleration", "Grey Strong - Accumulation", "Grey Weak - Distribution", "Red - Deceleration"].index(st.session_state.market_pulse_spx),
+            key="pulse_select_spx"
         )
         
-        if market_pulse_us != st.session_state.market_pulse_us:
-            st.session_state.market_pulse_us = market_pulse_us
-            saved_inputs['market_pulse_us'] = market_pulse_us
+        if market_pulse_spx != st.session_state.market_pulse_spx:
+            st.session_state.market_pulse_spx = market_pulse_spx
+            saved_inputs['market_pulse_spx'] = market_pulse_spx
             save_user_inputs(saved_inputs)
     
     with col2:
-        if market_pulse_us == "Green - Acceleration":
-            indicator3_us = 1.0
-            st.metric("Score", f"{indicator3_us}/1", delta="🟢")
-        elif market_pulse_us == "Grey Strong - Accumulation":
-            indicator3_us = 0.5
-            st.metric("Score", f"{indicator3_us}/1", delta="🟡")
+        if market_pulse_spx == "Green - Acceleration":
+            indicator3_spx = 1.0
+            st.metric("Score", f"{indicator3_spx}/1", delta="🟢")
+        elif market_pulse_spx == "Grey Strong - Accumulation":
+            indicator3_spx = 0.5
+            st.metric("Score", f"{indicator3_spx}/1", delta="🟡")
         else:
-            indicator3_us = 0.0
-            st.metric("Score", f"{indicator3_us}/1", delta="🔴")
+            indicator3_spx = 0.0
+            st.metric("Score", f"{indicator3_spx}/1", delta="🔴")
     
-    scores_trend_spx['indicator3'] = indicator3_us
-    scores_trend_ndx['indicator3'] = indicator3_us
+    scores_trend_spx['indicator3'] = indicator3_spx
     
-    # Row 2: HSI
+    # NDX
     with col3:
+        market_pulse_ndx = st.selectbox(
+            "NDX",
+            ["Green - Acceleration", "Grey Strong - Accumulation", "Grey Weak - Distribution", "Red - Deceleration"],
+            index=["Green - Acceleration", "Grey Strong - Accumulation", "Grey Weak - Distribution", "Red - Deceleration"].index(st.session_state.market_pulse_ndx),
+            key="pulse_select_ndx"
+        )
+        
+        if market_pulse_ndx != st.session_state.market_pulse_ndx:
+            st.session_state.market_pulse_ndx = market_pulse_ndx
+            saved_inputs['market_pulse_ndx'] = market_pulse_ndx
+            save_user_inputs(saved_inputs)
+    
+    with col4:
+        if market_pulse_ndx == "Green - Acceleration":
+            indicator3_ndx = 1.0
+            st.metric("Score", f"{indicator3_ndx}/1", delta="🟢")
+        elif market_pulse_ndx == "Grey Strong - Accumulation":
+            indicator3_ndx = 0.5
+            st.metric("Score", f"{indicator3_ndx}/1", delta="🟡")
+        else:
+            indicator3_ndx = 0.0
+            st.metric("Score", f"{indicator3_ndx}/1", delta="🔴")
+    
+    scores_trend_ndx['indicator3'] = indicator3_ndx
+    
+    # HSI
+    with col5:
         market_pulse_hsi = st.selectbox(
             "HSI",
             ["Green - Acceleration", "Grey Strong - Accumulation", "Grey Weak - Distribution", "Red - Deceleration"],
@@ -909,7 +1006,7 @@ with tab3:
             saved_inputs['market_pulse_hsi'] = market_pulse_hsi
             save_user_inputs(saved_inputs)
     
-    with col4:
+    with col6:
         if market_pulse_hsi == "Green - Acceleration":
             indicator3_hsi = 1.0
             st.metric("Score", f"{indicator3_hsi}/1", delta="🟢")
@@ -929,10 +1026,15 @@ with tab3:
     total_trend_ndx = sum(scores_trend_ndx.values())
     total_trend_hsi = sum(scores_trend_hsi.values())
     
+    # Save component scores to session state
+    st.session_state.score_trend_spx = total_trend_spx
+    st.session_state.score_trend_ndx = total_trend_ndx
+    st.session_state.score_trend_hsi = total_trend_hsi
+    
     # Calculate overall scores (Liquidity + Sentiment + Trend)
-    st.session_state.total_score_spx = st.session_state.total_score_liq + total_sent_us + total_trend_spx
-    st.session_state.total_score_ndx = st.session_state.total_score_liq + total_sent_us + total_trend_ndx
-    st.session_state.total_score_hsi = st.session_state.total_score_liq + total_sent_hsi + total_trend_hsi
+    st.session_state.total_score_spx = st.session_state.total_score_liq + st.session_state.score_sent_spx + total_trend_spx
+    st.session_state.total_score_ndx = st.session_state.total_score_liq + st.session_state.score_sent_ndx + total_trend_ndx
+    st.session_state.total_score_hsi = st.session_state.total_score_liq + st.session_state.score_sent_hsi + total_trend_hsi
     
     st.markdown("#### 📊 Trend Scores by Index")
     col1, col2, col3 = st.columns(3)
